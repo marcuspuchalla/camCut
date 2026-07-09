@@ -33,7 +33,16 @@ function serveFile(res, filePath) {
       res.end("Not found");
       return;
     }
-    res.writeHead(200, { "Content-Type": MIME[path.extname(filePath)] || "application/octet-stream" });
+    const ext = path.extname(filePath);
+    const headers = { "Content-Type": MIME[ext] || "application/octet-stream" };
+    // Hashed build assets never change → cache forever. HTML must revalidate so
+    // a redeploy is picked up immediately (no stale old JavaScript).
+    if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+      headers["Cache-Control"] = "public, max-age=31536000, immutable";
+    } else {
+      headers["Cache-Control"] = "no-cache";
+    }
+    res.writeHead(200, headers);
     res.end(buf);
   });
 }
