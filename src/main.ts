@@ -351,7 +351,8 @@ async function viewerBase(): Promise<string> {
 }
 
 function connectSignaling() {
-  signalWs = new WebSocket(`ws://${location.host}/signal`);
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  signalWs = new WebSocket(`${proto}//${location.host}/signal`);
   signalWs.onopen = () => signalWs?.send(JSON.stringify({ type: "publisher", room }));
   signalWs.onmessage = async (ev) => {
     const msg = JSON.parse(ev.data);

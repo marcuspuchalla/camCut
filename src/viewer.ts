@@ -33,7 +33,8 @@ function teardownPeer() {
 }
 
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/signal`);
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(`${proto}//${location.host}/signal`);
 
   ws.onopen = () => {
     showOverlay("Connecting to PC…");
