@@ -331,6 +331,18 @@ body {
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+/* PiP source video: present in the layout (Safari needs it rendered to pop it
+   out) but visually out of the way. */
+#pipVideo {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 2px;
+  height: 2px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .hidden { display: none !important; }
 
 @keyframes pulse {

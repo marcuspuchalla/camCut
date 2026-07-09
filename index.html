@@ -114,8 +114,10 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <!-- Hidden video mirroring the crop canvas, used for Picture-in-Picture -->
-    <video id="pipVideo" playsinline muted class="hidden"></video>
+    <!-- Video mirroring the crop canvas, used for Picture-in-Picture. Kept
+         rendered-but-invisible (not display:none) because Safari refuses to
+         pop out a hidden video. -->
+    <video id="pipVideo" playsinline muted></video>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

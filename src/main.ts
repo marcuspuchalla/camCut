@@ -279,8 +279,7 @@ function startRender() {
 }
 
 function stopRenderIfIdle() {
-  const pipOpen = document.pictureInPictureElement === pipVideo;
-  if (!pipOpen && !sharing && zoomTimer) {
+  if (!pipActive() && !sharing && zoomTimer) {
     clearInterval(zoomTimer);
     zoomTimer = 0;
   }
@@ -449,17 +448,36 @@ shareNativeBtn.addEventListener("click", async () => {
 });
 
 // --- Picture-in-Picture (desktop always-on-top window) --------------------
+// Chrome/Edge use the standard API; Safari uses webkitSetPresentationMode and
+// does NOT set document.pictureInPictureEnabled — so detect both.
+type WebkitVideo = HTMLVideoElement & {
+  webkitSetPresentationMode?: (mode: string) => void;
+  webkitPresentationMode?: string;
+};
+function pipSupported(): boolean {
+  const v = pipVideo as WebkitVideo;
+  return (document.pictureInPictureEnabled ?? false) || typeof v.webkitSetPresentationMode === "function";
+}
+function pipActive(): boolean {
+  const v = pipVideo as WebkitVideo;
+  return document.pictureInPictureElement === pipVideo || v.webkitPresentationMode === "picture-in-picture";
+}
+
 pipBtn.addEventListener("click", async () => {
   if (!camStream) return;
-  if (document.pictureInPictureElement === pipVideo) {
-    await document.exitPictureInPicture();
-    return;
-  }
+  const v = pipVideo as WebkitVideo;
   try {
+    if (pipActive()) {
+      if (document.pictureInPictureElement) await document.exitPictureInPicture();
+      else v.webkitSetPresentationMode?.("inline");
+      return;
+    }
     startRender();
     if (!pipVideo.srcObject) pipVideo.srcObject = zoom.captureStream(30);
     await pipVideo.play();
-    await pipVideo.requestPictureInPicture();
+    if (document.pictureInPictureEnabled) await pipVideo.requestPictureInPicture();
+    else v.webkitSetPresentationMode?.("picture-in-picture");
+    pipBtn.textContent = "📌 Close pop-out";
   } catch (err) {
     setStatus("Couldn't open the pop-out window: " + (err as Error).message);
   }
@@ -471,8 +489,15 @@ pipVideo.addEventListener("leavepictureinpicture", () => {
   pipVideo.srcObject = null;
   stopRenderIfIdle();
 });
+// Safari fires webkitpresentationmodechanged instead of enter/leave events.
+pipVideo.addEventListener("webkitpresentationmodechanged", () => {
+  const v = pipVideo as WebkitVideo;
+  if (v.webkitPresentationMode === "picture-in-picture") pipBtn.textContent = "📌 Close pop-out";
+  else {
+    pipBtn.textContent = "📌 Pop out";
+    stopRenderIfIdle();
+  }
+});
 
-// Pop-out is a desktop feature; hide it where PiP isn't supported.
-if (!("pictureInPictureEnabled" in document) || !document.pictureInPictureEnabled) {
-  pipBtn.classList.add("hidden");
-}
+// Hide the button only where no form of PiP exists (e.g. most mobile browsers).
+if (!pipSupported()) pipBtn.classList.add("hidden");
