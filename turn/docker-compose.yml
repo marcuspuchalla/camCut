@@ -1,0 +1,44 @@
+# Self-hosted TURN relay (coturn) for Baby Cam Cut.
+#
+# Deploy this as its own service in Coolify (Docker Compose), on the SAME server
+# your app runs on. It gives WebRTC a relay for the cases where a direct
+# peer-to-peer path is impossible (different networks, cellular, strict NAT,
+# hardened browsers). Relayed media then flows through THIS server; direct
+# connections still bypass it entirely.
+#
+# Required env vars (set in Coolify for this service):
+#   TURN_USER          e.g.  babycam
+#   TURN_PASSWORD      a long random string
+#   TURN_REALM         e.g.  bcc.fmp.dev
+#   TURN_EXTERNAL_IP   the server's PUBLIC IPv4 address
+#
+# Then point the app at it (env vars on the Baby Cam Cut app, not here):
+#   TURN_URL=turn:<host>:3478,turn:<host>:3478?transport=tcp
+#   TURN_USERNAME=<TURN_USER>
+#   TURN_CREDENTIAL=<TURN_PASSWORD>
+# where <host> is a DNS name (or IP) that resolves to this server.
+#
+# Open these ports in your server firewall:
+#   3478/udp, 3478/tcp        (TURN control + relay negotiation)
+#   49160-49200/udp           (media relay range, matches --min/max-port below)
+
+services:
+  coturn:
+    image: coturn/coturn:4.6
+    restart: unless-stopped
+    network_mode: host # needed so the UDP relay port range is reachable
+    command:
+      - -n
+      - --log-file=stdout
+      - --lt-cred-mech
+      - --fingerprint
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --no-multicast-peers
+      - --listening-port=3478
+      - --min-port=49160
+      - --max-port=49200
+      - --realm=${TURN_REALM}
+      - --user=${TURN_USER}:${TURN_PASSWORD}
+      - --external-ip=${TURN_EXTERNAL_IP}
