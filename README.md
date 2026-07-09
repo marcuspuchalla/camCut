@@ -1,138 +1,141 @@
-# camCut 📌
+# Baby Cam Cut 👶🌙
 
-**Mark a region of your webcam feed and pop it out into a small, always-on-top window.**
+**Turn any device with a camera into a baby monitor — mark the region you care
+about, and watch it live on your phone over a private peer-to-peer link.**
 
-camCut is a tiny, dependency-light web app that turns your webcam into a focused
-"picture-in-picture" monitor. You draw a box over the live feed, and camCut shows
-*only* that region in a floating window that stays on top of everything else you're
-doing — your editor, your browser, a full-screen app, whatever.
-
-No servers. No accounts. No streaming stack. Just a browser tab and the built-in
-[Picture-in-Picture API](https://developer.mozilla.org/en-US/docs/Web/API/Picture-in-Picture_API).
+Point an old phone or a laptop webcam at the crib, optionally drag a box to zoom
+into just that spot, and share a link. Whoever opens it watches the live feed —
+and the video travels **directly between the two devices**, never through a
+server. No app to install, no account, no cloud recording.
 
 ---
 
 ## Why I built this
 
-I have a baby who naps in a crib **behind me** while I work at my PC. I wanted a
-simple way to keep half an eye on them without turning around every two minutes.
+Our baby naps in a crib behind me while I work, and I wanted to keep half an eye
+on her without turning around — and to glance at my phone when I step away.
 
-My first instinct was the classic route: point a webcam at the crib, stream it over
-**RTSP**, and open it in **VLC** — because VLC has an "always on top" window mode.
-That works, but it's a lot of moving parts (an RTSP server, ffmpeg, VLC config) just
-to get a small floating video.
+The first idea was a webcam streamed over RTSP into VLC (which has an always-on-top
+window). That's a lot of moving parts for a small floating video. It turned out the
+browser already has everything needed:
 
-Then it clicked: the browser already has an always-on-top floating window built in —
-**Picture-in-Picture**. So instead of a streaming server, camCut just:
+- **Picture-in-Picture** gives an always-on-top floating window on the desktop.
+- **WebRTC** streams the cropped feed straight to a phone, peer-to-peer.
+- A tiny **signaling server** just introduces the two devices; the video never
+  passes through it.
 
-1. grabs the webcam,
-2. lets me **crop to the exact region** I care about (the crib, not the whole room),
-3. and **pops that crop out** into a PiP window that floats above my work.
-
-That's the whole idea. A baby monitor for people who live in front of a screen —
-but it works just as well for keeping an eye on anything: a 3D printer, a front door,
-a pot on the stove, a pet, a long-running progress bar on another machine's screen.
+So Baby Cam Cut is a browser-only baby monitor: use one device as the camera, watch
+from any other, and keep the video on your own devices.
 
 ---
 
 ## Features
 
-- 🎥 **Live webcam** straight in the browser (`getUserMedia`).
-- ✂️ **Drag-to-crop** — draw a box over the feed to pick exactly the region you want.
-- 🔍 **In-page zoom** — view just that region, scaled up to fill the panel.
-- 📌 **Always-on-top pop-out** — send the cropped region to a floating PiP window that
-  stays above every other application.
-- 📱 **Watch on your phone** — share the live crop to any phone on the same Wi-Fi via a
-  QR code. Peer-to-peer over WebRTC, sub-second latency, no cloud.
-- 🧭 **Resolution-independent selection** — the crop is stored relative to the video
-  frame, so resizing the window never breaks it.
-- 🪶 **Tiny & local** — plain TypeScript + Vite, one small dependency (QR generation),
-  and nothing ever leaves your local network.
+- 🎥 **Any device is the camera** — a spare/old phone pointed at the crib, or a laptop
+  webcam. Pick front/back (or any connected camera).
+- ✂️ **Optional crop** — drag a box to watch just one region (the crib, not the whole
+  room), or stream the whole frame.
+- 📱 **Watch anywhere** — share a link or QR code; the viewer sees the live feed
+  full-screen, screen kept awake. Copy the link or hand it off via the native share
+  sheet (WhatsApp, Messages, …).
+- 🔗 **One permanent link** — each camera has a stable id in its URL. Bookmark it once;
+  the same camera and the same viewer link come back on any computer, any day. Share
+  the viewer link with your partner a single time.
+- 📌 **Always-on-top pop-out** (desktop) — float the crop over your other windows.
+- 🔒 **Peer-to-peer** — video flows directly between devices over WebRTC; the server
+  only relays the tiny connection handshake and never sees your stream.
+- 🌙 Calm, dark, one-handed **night-nursery** interface.
 
 ---
 
 ## How to use it
 
-1. **Start webcam** and allow camera access.
-2. **Drag a box** around the thing you want to watch (e.g. the crib).
-3. Click **📌 Pop out (always on top)**.
-4. A small floating window appears showing only that region. Drag it to a corner,
-   resize it, and get back to work — it stays on top.
+**On the camera device** (the one watching the crib):
 
-To watch a different spot: **Close pop-out → Clear → drag a new box → Pop out** again.
+1. Open the app and **Start camera**; pick front/back if needed.
+2. Optionally **drag a box** to zoom into a region (or leave it for the full frame).
+3. Press **Go live**.
+4. **Copy** or **Share** the viewer link / scan the QR — send it to whoever's watching.
+
+**On the watching device** (your phone, your partner's phone, an old tablet):
+
+- Open the link. You'll see the live feed. Tap for fullscreen.
+
+Bookmark the camera page on the camera device — it's your permanent link.
 
 ---
 
-## Watch on your phone (same Wi-Fi)
-
-Popped-out windows are great while you're at the PC — but sometimes you step away
-(the toilet, the kitchen) and want the view on your phone. camCut can stream the
-cropped region to any phone on the **same Wi-Fi**, peer-to-peer over WebRTC:
-
-1. Mark a region on the PC.
-2. Click **📱 Share to phone** — a **QR code** and a link appear.
-3. On your phone, **scan the QR** (or open the link, e.g. `http://192.168.1.105:5188/view.html`).
-4. The phone shows the live crop full-screen. Tap to toggle fullscreen; the screen
-   is kept awake while watching.
-
-How it works: the PC acts as a WebRTC *publisher*, a tiny signaling relay (built into
-the dev server) introduces the two devices, and the video then flows **directly**
-between PC and phone — it never touches a server or the internet. Latency is well
-under a second, unlike RTSP/HLS approaches.
-
-> **Heads-up on privacy:** there's no password. Anyone on your Wi-Fi who opens the link
-> can watch the stream. That's fine for a home network; don't use it on untrusted Wi-Fi.
->
-> **Requires the dev server** (`npm run dev`) — the signaling relay rides on it. The
-> phone viewer only *receives* video, so it needs no camera permission and works over
-> plain `http` on the LAN. Use Chrome/Edge/Safari on the phone.
+## Run it locally (test before deploying)
 
 Requires [Node.js](https://nodejs.org/) 18+.
 
 ```bash
-git clone <this-repo>
-cd camCut
 npm install
-npm run dev
+npm run dev        # http://localhost:5188  (hot reload, for development)
 ```
 
-Then open the printed URL (defaults to **http://localhost:5188/**).
-
-> The camera API (`getUserMedia`) only works over **`localhost` or HTTPS**, which the
-> Vite dev server provides. If you host camCut somewhere, serve it over HTTPS.
-
-### Build for production
+Or run the exact production server locally:
 
 ```bash
-npm run build     # type-checks, then outputs static files to dist/
-npm run preview   # serve the built files locally
+npm run build
+npm start          # serves the built app + signaling on http://localhost:5188
 ```
 
-The `dist/` folder is fully static — drop it on any static host (GitHub Pages,
-Netlify, your own box) as long as it's served over HTTPS.
+### Local testing notes
+
+- The **camera side needs a secure context** (`getUserMedia`). `localhost` counts as
+  secure, so **use the computer as the camera** when testing locally.
+- The **viewer only receives** video, so it works over plain `http` on your LAN — open
+  the printed `http://<your-LAN-IP>:5188/view?room=…` link on your phone. Locally the
+  app builds the viewer link with your LAN IP automatically.
+- To use a **phone as the camera**, you need HTTPS — that works once deployed (below).
 
 ---
 
-## Browser support
+## Deploy to your own domain (Coolify)
 
-Picture-in-Picture of a canvas stream works in **Chrome, Edge, and Safari**.
-Firefox's PiP currently only pops out plain `<video>` elements and may not accept the
-cropped canvas stream — use a Chromium-based browser or Safari for the pop-out feature.
-The in-page zoom works everywhere.
+The included multi-stage `Dockerfile` builds the app and runs the standalone server.
+
+1. In Coolify, add an application from this repo, build type **Dockerfile**.
+2. Set the domain (e.g. `https://bcc.fmp.dev`) — Coolify provisions TLS.
+3. The server listens on `$PORT` (Coolify sets it); it defaults to `5188`.
+
+Once served over HTTPS, **any device — including a phone — can be the camera**, and
+the same permanent links work from anywhere on the internet. The video still flows
+peer-to-peer between the camera and each viewer.
+
+### The one caveat: NAT traversal
+
+WebRTC connects the two devices directly. Whether that succeeds depends on where they
+are:
+
+| Situation | Result |
+|-----------|--------|
+| Camera + viewer on the **same Wi-Fi** | ✅ Direct P2P — video stays on your LAN |
+| Different networks (e.g. viewer on cellular) | ⚠️ Usually still direct via STUN hole-punching |
+| Behind a **strict/symmetric NAT** | ❌ Direct P2P impossible without a TURN relay |
+
+For the common case (watching from home Wi-Fi) it's pure P2P and nothing touches a
+server. A TURN relay (which would route media through a server) is only needed for the
+hard cross-network cases and isn't configured by default.
+
+### Access
+
+Anyone with a room link can watch that camera, so treat links as secret. For a family
+baby monitor that's usually fine; if you want it locked down, add a login in front.
 
 ---
 
-## How it works (short version)
+## How it works
 
-- The webcam frame is drawn to a hidden source; the selected region is copied out with
-  `ctx.drawImage(video, sx, sy, sw, sh, …)` on a `requestAnimationFrame` loop — a live
-  crop at the region's native resolution.
-- For the pop-out, that crop canvas is turned into a `MediaStream` via
-  `canvas.captureStream()`, fed into a hidden `<video>`, and handed to
-  `video.requestPictureInPicture()` — which the OS renders as an always-on-top window.
-- For phone sharing, the same `MediaStream` is sent over a WebRTC peer connection. A
-  minimal WebSocket relay (a Vite dev-server plugin) exchanges the SDP/ICE handshake;
-  the media itself travels directly PC ↔ phone.
+- The camera frame is drawn to a hidden canvas — the whole frame, or just your crop —
+  on a timer (so it keeps updating even when the window loses focus).
+- That canvas becomes a `MediaStream` via `captureStream()`. For the desktop pop-out
+  it's handed to `requestPictureInPicture()`; for phones it's sent over a WebRTC peer
+  connection.
+- A small WebSocket **signaling** service (a Vite dev plugin in development, the
+  standalone `server/` in production) matches cameras and viewers by **room id** and
+  relays only the SDP/ICE handshake. The media itself is peer-to-peer.
 
 No RTSP, no ffmpeg, no VLC. The browser does all of it.
 
