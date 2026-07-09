@@ -42,10 +42,12 @@ a pot on the stove, a pet, a long-running progress bar on another machine's scre
 - 🔍 **In-page zoom** — view just that region, scaled up to fill the panel.
 - 📌 **Always-on-top pop-out** — send the cropped region to a floating PiP window that
   stays above every other application.
+- 📱 **Watch on your phone** — share the live crop to any phone on the same Wi-Fi via a
+  QR code. Peer-to-peer over WebRTC, sub-second latency, no cloud.
 - 🧭 **Resolution-independent selection** — the crop is stored relative to the video
   frame, so resizing the window never breaks it.
-- 🪶 **Tiny & local** — plain TypeScript + Vite, no runtime dependencies, nothing
-  leaves your machine.
+- 🪶 **Tiny & local** — plain TypeScript + Vite, one small dependency (QR generation),
+  and nothing ever leaves your local network.
 
 ---
 
@@ -61,7 +63,29 @@ To watch a different spot: **Close pop-out → Clear → drag a new box → Pop 
 
 ---
 
-## Running locally
+## Watch on your phone (same Wi-Fi)
+
+Popped-out windows are great while you're at the PC — but sometimes you step away
+(the toilet, the kitchen) and want the view on your phone. camCut can stream the
+cropped region to any phone on the **same Wi-Fi**, peer-to-peer over WebRTC:
+
+1. Mark a region on the PC.
+2. Click **📱 Share to phone** — a **QR code** and a link appear.
+3. On your phone, **scan the QR** (or open the link, e.g. `http://192.168.1.105:5188/view.html`).
+4. The phone shows the live crop full-screen. Tap to toggle fullscreen; the screen
+   is kept awake while watching.
+
+How it works: the PC acts as a WebRTC *publisher*, a tiny signaling relay (built into
+the dev server) introduces the two devices, and the video then flows **directly**
+between PC and phone — it never touches a server or the internet. Latency is well
+under a second, unlike RTSP/HLS approaches.
+
+> **Heads-up on privacy:** there's no password. Anyone on your Wi-Fi who opens the link
+> can watch the stream. That's fine for a home network; don't use it on untrusted Wi-Fi.
+>
+> **Requires the dev server** (`npm run dev`) — the signaling relay rides on it. The
+> phone viewer only *receives* video, so it needs no camera permission and works over
+> plain `http` on the LAN. Use Chrome/Edge/Safari on the phone.
 
 Requires [Node.js](https://nodejs.org/) 18+.
 
@@ -106,6 +130,9 @@ The in-page zoom works everywhere.
 - For the pop-out, that crop canvas is turned into a `MediaStream` via
   `canvas.captureStream()`, fed into a hidden `<video>`, and handed to
   `video.requestPictureInPicture()` — which the OS renders as an always-on-top window.
+- For phone sharing, the same `MediaStream` is sent over a WebRTC peer connection. A
+  minimal WebSocket relay (a Vite dev-server plugin) exchanges the SDP/ICE handshake;
+  the media itself travels directly PC ↔ phone.
 
 No RTSP, no ffmpeg, no VLC. The browser does all of it.
 

@@ -126,4 +126,57 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.share-panel {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+#qr {
+  width: 220px;
+  height: 220px;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  flex: none;
+}
+
+.share-info { line-height: 1.4; }
+
+.share-title {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.share-sub {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.share-link {
+  display: inline-block;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 1rem;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.share-status {
+  margin: 10px 0 0;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.share-warn {
+  margin: 8px 0 0;
+  color: #e0b341;
+  font-size: 0.82rem;
+}
+
 .hidden { display: none !important; }

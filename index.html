@@ -29,10 +29,23 @@
       <div class="toolbar">
         <button id="zoomBtn" disabled>Zoom into selection</button>
         <button id="pipBtn" disabled>📌 Pop out (always on top)</button>
+        <button id="shareBtn" disabled>📱 Share to phone</button>
         <button id="editBtn" class="hidden">Edit selection</button>
         <button id="clearBtn" disabled>Clear</button>
       </div>
       <p id="status" class="status"></p>
+
+      <!-- Phone-sharing panel: scan the QR or open the link on your phone -->
+      <section id="sharePanel" class="share-panel hidden">
+        <canvas id="qr" width="220" height="220"></canvas>
+        <div class="share-info">
+          <p class="share-title">Open on your phone</p>
+          <p class="share-sub">On the same Wi-Fi, scan this code or open:</p>
+          <a id="shareLink" class="share-link" href="#" target="_blank" rel="noopener"></a>
+          <p id="shareStatus" class="share-status"></p>
+          <p class="share-warn">⚠ Anyone on your Wi-Fi with this link can watch.</p>
+        </div>
+      </section>
     </main>
 
     <!-- Hidden video that mirrors the zoom canvas; used for Picture-in-Picture -->

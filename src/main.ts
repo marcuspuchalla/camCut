@@ -1,4 +1,5 @@
 import "./style.css";
+import QRCode from "qrcode";
 
 // --- Elements -------------------------------------------------------------
 const video = document.getElementById("video") as HTMLVideoElement;
@@ -12,9 +13,15 @@ const pipVideo = document.getElementById("pipVideo") as HTMLVideoElement;
 const startBtn = document.getElementById("startBtn") as HTMLButtonElement;
 const zoomBtn = document.getElementById("zoomBtn") as HTMLButtonElement;
 const pipBtn = document.getElementById("pipBtn") as HTMLButtonElement;
+const shareBtn = document.getElementById("shareBtn") as HTMLButtonElement;
 const editBtn = document.getElementById("editBtn") as HTMLButtonElement;
 const clearBtn = document.getElementById("clearBtn") as HTMLButtonElement;
 const status = document.getElementById("status") as HTMLParagraphElement;
+
+const sharePanel = document.getElementById("sharePanel") as HTMLElement;
+const qrCanvas = document.getElementById("qr") as HTMLCanvasElement;
+const shareLink = document.getElementById("shareLink") as HTMLAnchorElement;
+const shareStatus = document.getElementById("shareStatus") as HTMLParagraphElement;
 
 const octx = overlay.getContext("2d")!;
 const zctx = zoom.getContext("2d")!;
@@ -30,6 +37,7 @@ let dragStart = { x: 0, y: 0 }; // in overlay-canvas pixels
 let dragNow = { x: 0, y: 0 };
 
 let zoomRAF = 0;
+let sharing = false;
 
 function setStatus(msg: string) {
   status.textContent = msg;
@@ -153,8 +161,9 @@ overlay.addEventListener("pointerup", () => {
 
   zoomBtn.disabled = false;
   pipBtn.disabled = false;
+  shareBtn.disabled = false;
   clearBtn.disabled = false;
-  setStatus("Region marked. Zoom in, or pop out an always-on-top window.");
+  setStatus("Region marked. Zoom in, pop out, or share to your phone.");
   drawOverlay();
 });
 
@@ -186,10 +195,10 @@ function startRender() {
 }
 
 function stopRenderIfIdle() {
-  // Only stop drawing when neither the panel nor PiP needs the frames.
+  // Only stop drawing when no consumer (panel, PiP, or phone share) needs frames.
   const pipOpen = document.pictureInPictureElement === pipVideo;
   const panelOpen = !zoomPanel.classList.contains("hidden");
-  if (!pipOpen && !panelOpen && zoomRAF) {
+  if (!pipOpen && !panelOpen && !sharing && zoomRAF) {
     cancelAnimationFrame(zoomRAF);
     zoomRAF = 0;
   }
@@ -250,8 +259,124 @@ pipVideo.addEventListener("leavepictureinpicture", () => {
   stopRenderIfIdle();
 });
 
+// --- Share to phone (WebRTC over LAN) -------------------------------------
+// The PC is the "publisher": it opens a signaling WebSocket, and for every
+// phone that joins it spins up a peer connection carrying the live crop.
+const RTC_CONFIG: RTCConfiguration = {
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+};
+
+let signalWs: WebSocket | null = null;
+let shareStream: MediaStream | null = null;
+const peers = new Map<number, RTCPeerConnection>();
+
+shareBtn.addEventListener("click", () => {
+  if (sharing) stopSharing();
+  else startSharing();
+});
+
+async function startSharing() {
+  if (!selection) return;
+  sharing = true;
+  startRender();
+  if (!shareStream) shareStream = zoom.captureStream(30);
+
+  // Build the phone-facing link + QR from the PC's LAN IP.
+  let host = location.host;
+  try {
+    const info = await fetch("/api/lan-info").then((r) => r.json());
+    const ip: string | undefined = info.ips?.[0];
+    if (ip) host = `${ip}:${location.port || "5188"}`;
+  } catch {
+    /* fall back to current host */
+  }
+  const url = `http://${host}/view.html`;
+  shareLink.textContent = url;
+  shareLink.href = url;
+  QRCode.toCanvas(qrCanvas, url, { width: 220, margin: 1 }).catch(() => {});
+
+  sharePanel.classList.remove("hidden");
+  shareBtn.textContent = "📱 Stop sharing";
+  setShareStatus("Waiting for a phone to connect…");
+
+  connectSignaling();
+}
+
+function connectSignaling() {
+  signalWs = new WebSocket(`ws://${location.host}/signal`);
+  signalWs.onopen = () => signalWs?.send(JSON.stringify({ type: "publisher" }));
+  signalWs.onmessage = async (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === "viewer-join") {
+      await createPeer(msg.viewerId);
+    } else if (msg.type === "answer") {
+      await peers.get(msg.viewerId)?.setRemoteDescription(msg.sdp);
+    } else if (msg.type === "ice" && msg.viewerId != null) {
+      try {
+        await peers.get(msg.viewerId)?.addIceCandidate(msg.candidate);
+      } catch {
+        /* ignore late candidates */
+      }
+    } else if (msg.type === "viewer-leave") {
+      peers.get(msg.viewerId)?.close();
+      peers.delete(msg.viewerId);
+      updateViewerCount();
+    }
+  };
+  signalWs.onclose = () => {
+    if (sharing) setShareStatus("Signaling disconnected.");
+  };
+}
+
+async function createPeer(viewerId: number) {
+  peers.get(viewerId)?.close(); // replace any stale peer for this viewer
+  const pc = new RTCPeerConnection(RTC_CONFIG);
+  peers.set(viewerId, pc);
+
+  shareStream!.getTracks().forEach((t) => pc.addTrack(t, shareStream!));
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      signalWs?.send(JSON.stringify({ type: "ice", viewerId, candidate: e.candidate }));
+    }
+  };
+  pc.onconnectionstatechange = () => {
+    if (["failed", "closed", "disconnected"].includes(pc.connectionState)) {
+      peers.delete(viewerId);
+    }
+    updateViewerCount();
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  signalWs?.send(JSON.stringify({ type: "offer", viewerId, sdp: offer }));
+}
+
+function updateViewerCount() {
+  const n = [...peers.values()].filter((p) => p.connectionState === "connected").length;
+  setShareStatus(n > 0 ? `📶 ${n} phone${n === 1 ? "" : "s"} watching.` : "Waiting for a phone to connect…");
+}
+
+function stopSharing() {
+  sharing = false;
+  peers.forEach((p) => p.close());
+  peers.clear();
+  signalWs?.close();
+  signalWs = null;
+  shareStream?.getTracks().forEach((t) => t.stop());
+  shareStream = null;
+  sharePanel.classList.add("hidden");
+  shareBtn.textContent = "📱 Share to phone";
+  stopRenderIfIdle();
+  setStatus("Stopped sharing to phone.");
+}
+
+function setShareStatus(msg: string) {
+  shareStatus.textContent = msg;
+}
+
 // --- Clear ----------------------------------------------------------------
 clearBtn.addEventListener("click", async () => {
+  if (sharing) stopSharing();
   if (document.pictureInPictureElement === pipVideo) {
     await document.exitPictureInPicture();
   }
@@ -259,6 +384,7 @@ clearBtn.addEventListener("click", async () => {
   selection = null;
   zoomBtn.disabled = true;
   pipBtn.disabled = true;
+  shareBtn.disabled = true;
   clearBtn.disabled = true;
   drawOverlay();
   setStatus("Selection cleared. Drag a new box on the feed.");
