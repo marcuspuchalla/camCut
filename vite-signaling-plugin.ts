@@ -1,7 +1,7 @@
 import type { Plugin } from "vite";
 import { WebSocketServer } from "ws";
 import { attachSignaling } from "./server/signaling.js";
-import { getLanIps } from "./server/net.js";
+import { getLanIps, getIceServers } from "./server/net.js";
 
 // Dev-server counterpart of the standalone production server: rides on Vite's
 // HTTP server so `npm run dev` gives the full room-based signaling + LAN link
@@ -41,18 +41,8 @@ export function signalingPlugin(): Plugin {
       });
 
       server.middlewares.use("/api/ice", (_req, res) => {
-        const iceServers: unknown[] = [
-          { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-        ];
-        if (process.env.TURN_URL) {
-          iceServers.push({
-            urls: process.env.TURN_URL.split(",").map((s) => s.trim()),
-            username: process.env.TURN_USERNAME || "",
-            credential: process.env.TURN_CREDENTIAL || "",
-          });
-        }
         res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ iceServers }));
+        res.end(JSON.stringify({ iceServers: getIceServers() }));
       });
     },
   };

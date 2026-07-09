@@ -87,11 +87,20 @@
 
       <h2>5. STUN-/TURN-Server</h2>
       <p>
-        Für den Verbindungsaufbau kann ein STUN-Server genutzt werden (aktuell
+        Für den Verbindungsaufbau werden STUN-Server genutzt (aktuell
         <em>stun.l.google.com</em> von Google). Dabei wird die IP-Adresse an
-        diesen Dienst übermittelt. Falls zusätzlich ein TURN-Server konfiguriert
-        ist, kann in bestimmten Netzwerkkonstellationen der Video-Stream über
-        diesen Server geleitet werden.
+        diesen Dienst übermittelt.
+      </p>
+      <p>
+        Wenn keine direkte Verbindung zwischen den Geräten möglich ist (z. B. in
+        unterschiedlichen Netzen oder bei restriktiven Routern), wird als
+        Ausweichlösung ein TURN-Server verwendet (standardmäßig das kostenlose
+        „Open Relay" von Metered, <em>openrelay.metered.ca</em>). In diesem Fall
+        wird der Video-Stream verschlüsselt über diesen Server geleitet; dabei
+        werden IP-Adressen und die Mediendaten an den Anbieter übermittelt. Bei
+        direkter Verbindung (z. B. im selben WLAN) kommt der TURN-Server nicht
+        zum Einsatz. Ein eigener, selbst gehosteter TURN-Server kann konfiguriert
+        werden, um die Daten auf eigener Infrastruktur zu halten.
       </p>
 
       <h2>6. Schriftarten</h2>

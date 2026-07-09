@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { attachSignaling } from "./signaling.js";
-import { getLanIps } from "./net.js";
+import { getLanIps, getIceServers } from "./net.js";
 
 // Standalone production server for Baby Cam Cut: serves the built static app
 // (dist/) and hosts the room-based signaling relay on /signal. Run locally
@@ -38,24 +38,6 @@ function serveFile(res, filePath) {
   });
 }
 
-// ICE servers offered to the browser. STUN helps devices find a direct path;
-// a TURN relay (set via env) is the fallback for networks that block direct
-// peer-to-peer (strict NAT, Wi-Fi client isolation, different networks).
-//   TURN_URL=turn:turn.example.com:3478   TURN_USERNAME=...   TURN_CREDENTIAL=...
-function iceServers() {
-  const servers = [
-    { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-  ];
-  if (process.env.TURN_URL) {
-    servers.push({
-      urls: process.env.TURN_URL.split(",").map((s) => s.trim()),
-      username: process.env.TURN_USERNAME || "",
-      credential: process.env.TURN_CREDENTIAL || "",
-    });
-  }
-  return servers;
-}
-
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   let pathname = url.pathname;
@@ -68,7 +50,7 @@ const server = http.createServer((req, res) => {
 
   if (pathname === "/api/ice") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ iceServers: iceServers() }));
+    res.end(JSON.stringify({ iceServers: getIceServers() }));
     return;
   }
 
