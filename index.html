@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>camCut — webcam region zoom</title>
+  </head>
+  <body>
+    <header>
+      <h1>camCut</h1>
+      <p class="hint">Drag a box on the live feed to zoom into that region.</p>
+    </header>
+
+    <main>
+      <!-- Selection stage: live webcam + drag-to-select overlay -->
+      <section id="stage" class="panel">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div id="startNotice" class="notice">
+          <button id="startBtn">Start webcam</button>
+        </div>
+      </section>
+
+      <!-- Zoom stage: only the selected region, scaled up -->
+      <section id="zoomPanel" class="panel hidden">
+        <canvas id="zoom"></canvas>
+      </section>
+
+      <div class="toolbar">
+        <button id="zoomBtn" disabled>Zoom into selection</button>
+        <button id="pipBtn" disabled>📌 Pop out (always on top)</button>
+        <button id="editBtn" class="hidden">Edit selection</button>
+        <button id="clearBtn" disabled>Clear</button>
+      </div>
+      <p id="status" class="status"></p>
+    </main>
+
+    <!-- Hidden video that mirrors the zoom canvas; used for Picture-in-Picture -->
+    <video id="pipVideo" playsinline muted class="hidden"></video>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
