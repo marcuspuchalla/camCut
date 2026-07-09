@@ -12,6 +12,7 @@ import {
   acceptAnswer,
   type FountainEncoder,
 } from "../lib/offline";
+import { ensureBarcodeDetector } from "../lib/barcodePolyfill";
 import { baseNotices } from "../composables/useCapabilities";
 
 type Role = "camera" | "viewer";
@@ -58,7 +59,8 @@ async function getRearCamera(): Promise<MediaStream> {
   });
 }
 
-function startScan(): Promise<string> {
+async function startScan(): Promise<string> {
+  await ensureBarcodeDetector(); // loads the zxing polyfill on iOS/Firefox; no-op on Chromium
   progress.value = 0;
   const dec = createFountainDecoder();
   const { done, cancel } = scanQR(scanVideo.value!, dec, (p) => (progress.value = p));

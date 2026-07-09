@@ -17,10 +17,12 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg", "apple-touch-icon.png", "favicon-32.png"],
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        // Include wasm so the zxing BarcodeDetector polyfill (iOS/Firefox) works
+        // fully offline in Hotel mode without any CDN fetch.
+        globPatterns: ["**/*.{js,css,html,svg,png,woff2,wasm}"],
         navigateFallback: "/index.html",
         // Hotel mode must run with no internet, so precache generously and let
-        // the app shell + all route chunks (incl. jsQR / qrcode) work offline.
+        // the app shell + all route chunks (incl. jsQR / qrcode / zxing) work offline.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
       manifest: {
