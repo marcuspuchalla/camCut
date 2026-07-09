@@ -58,8 +58,10 @@ const server = http.createServer((req, res) => {
   }
 
   if (pathname === "/api/ice") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ iceServers: getIceServers() }));
+    getIceServers().then((iceServers) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ iceServers }));
+    });
     return;
   }
 

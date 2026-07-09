@@ -1,9 +1,34 @@
-# Self-hosted TURN (coturn) for Baby Cam Cut
+# TURN relay for Baby Cam Cut
 
 A TURN server relays the video when two devices can't reach each other directly
-(different networks, cellular, strict NAT, hardened browsers like Vanadium).
-The free public relays are unreliable/gone, so run your own — you already have
-the server.
+(different networks, cellular, strict NAT, hardened browsers like Vanadium). A
+relay is unavoidable for those cases — no "pure P2P" library removes it (see the
+note at the bottom). Two good options:
+
+## Option A — Cloudflare Realtime TURN (recommended, easiest)
+
+Free 1,000 GB/month, and **relayed video flows through Cloudflare, not your
+server** (so no bandwidth cost or port-opening on your box).
+
+1. In the Cloudflare dashboard: **Realtime → TURN → Create** a TURN app. Note the
+   **Turn Token ID** and **API Token**.
+2. Set two env vars on the **Baby Cam Cut app** and redeploy:
+   ```
+   TURN_KEY_ID=<Turn Token ID>
+   TURN_KEY_API_TOKEN=<API Token>
+   ```
+3. The app mints short-lived credentials automatically (`/api/ice`). Open the app
+   → **Test connection** → **Relay (TURN): ✓**.
+
+That's it — no coturn, no firewall changes. Only use Option B if you specifically
+want the relayed media to stay on your own hardware.
+
+---
+
+## Option B — Self-hosted coturn
+
+Relayed video stays on *your* server (full privacy) but costs your server's
+bandwidth when used, and needs open UDP/TCP ports. You already have the server.
 
 **Bandwidth note:** TURN is a *fallback*. When devices can connect directly
 (same Wi‑Fi, or STUN succeeds) the video goes device‑to‑device and never touches

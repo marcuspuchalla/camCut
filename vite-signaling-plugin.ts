@@ -41,8 +41,10 @@ export function signalingPlugin(): Plugin {
       });
 
       server.middlewares.use("/api/ice", (_req, res) => {
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ iceServers: getIceServers() }));
+        getIceServers().then((iceServers) => {
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ iceServers }));
+        });
       });
     },
   };

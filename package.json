@@ -1,6 +1,6 @@
 {
   "name": "baby-cam-cut",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Baby Cam Cut — mark a region of your webcam and watch it on your phone over a peer-to-peer link.",
   "license": "GPL-3.0-or-later",
   "author": "Marcus Puchalla",
