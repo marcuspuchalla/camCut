@@ -5,6 +5,7 @@
 const video = document.getElementById("view") as HTMLVideoElement;
 const overlay = document.getElementById("overlay") as HTMLElement;
 const msg = document.getElementById("msg") as HTMLElement;
+const popout = document.getElementById("popout") as HTMLButtonElement;
 
 // STUN helps candidate discovery; on a home LAN, host/mDNS candidates connect
 // even without internet.
@@ -19,10 +20,36 @@ let reconnectTimer: number | undefined;
 function showOverlay(text: string) {
   msg.textContent = text;
   overlay.classList.remove("hidden");
+  popout.classList.add("hidden"); // no stream to pop out while reconnecting
 }
 function hideOverlay() {
   overlay.classList.add("hidden");
 }
+
+// Pop-out (Picture-in-Picture): float the baby video always-on-top on a desktop
+// while you work. Shown only once the stream is playing and PiP is available.
+type WebkitVideo = HTMLVideoElement & {
+  webkitSetPresentationMode?: (mode: string) => void;
+  webkitSupportsPresentationMode?: (mode: string) => boolean;
+};
+function pipSupported(): boolean {
+  const v = video as WebkitVideo;
+  return (
+    (document.pictureInPictureEnabled ?? false) ||
+    typeof v.webkitSetPresentationMode === "function"
+  );
+}
+popout.addEventListener("click", async (e) => {
+  e.stopPropagation(); // don't also trigger the tap-to-fullscreen handler
+  const v = video as WebkitVideo;
+  try {
+    if (document.pictureInPictureElement) await document.exitPictureInPicture();
+    else if (document.pictureInPictureEnabled) await video.requestPictureInPicture();
+    else if (v.webkitSetPresentationMode) v.webkitSetPresentationMode("picture-in-picture");
+  } catch {
+    /* PiP can be refused (e.g. no user gesture) — ignore */
+  }
+});
 
 function teardownPeer() {
   if (pc) {
@@ -108,7 +135,10 @@ function setupPeer() {
 
 // Overlay hides only once frames are truly rendering — so a stalled/black
 // stream shows a status message instead of a mysterious black screen.
-video.addEventListener("playing", hideOverlay);
+video.addEventListener("playing", () => {
+  hideOverlay();
+  if (pipSupported()) popout.classList.remove("hidden");
+});
 
 function scheduleReconnect() {
   clearTimeout(reconnectTimer);
