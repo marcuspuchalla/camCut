@@ -65,11 +65,10 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Pretty routes.
+  // Single-page app: "/" serves index.html; every other client route
+  // (/behind, /stream, /hotel, /view, /impressum, …) falls through to the
+  // index.html fallback below and is resolved by the Vue router.
   if (pathname === "/") pathname = "/index.html";
-  else if (pathname === "/view") pathname = "/view.html";
-  else if (pathname === "/impressum") pathname = "/impressum.html";
-  else if (pathname === "/datenschutz") pathname = "/datenschutz.html";
 
   // Resolve inside DIST, guarding against path traversal.
   const safe = path.normalize(pathname).replace(/^(\.\.[/\\])+/, "");

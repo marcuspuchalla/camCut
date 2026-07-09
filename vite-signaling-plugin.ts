@@ -20,21 +20,6 @@ export function signalingPlugin(): Plugin {
         wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
       });
 
-      // Pretty routes -> .html (production server does the same).
-      const pretty: Record<string, string> = {
-        "/view": "/view.html",
-        "/impressum": "/impressum.html",
-        "/datenschutz": "/datenschutz.html",
-      };
-      server.middlewares.use((req, _res, next) => {
-        const path = (req.url ?? "").split("?")[0];
-        if (pretty[path]) {
-          const q = req.url!.includes("?") ? req.url!.slice(req.url!.indexOf("?")) : "";
-          req.url = pretty[path] + q;
-        }
-        next();
-      });
-
       server.middlewares.use("/api/lan-info", (_req, res) => {
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify({ ips: getLanIps() }));

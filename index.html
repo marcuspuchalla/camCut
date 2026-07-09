@@ -3,8 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0e1020" />
+    <meta name="theme-color" content="#0e1122" />
     <title>Baby Cam Cut</title>
+    <meta name="description" content="Watch your little one — on your desktop, another device, or fully offline." />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <!-- installable-app hints (iOS reads these, not the manifest) -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Baby Cam Cut" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -13,116 +22,7 @@
     />
   </head>
   <body>
-    <div class="app">
-      <header class="brand">
-        <span class="brand__mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" width="28" height="28">
-            <path
-              d="M22 21a9 9 0 1 1-6.6-15.2A7 7 0 1 0 22 21Z"
-              fill="currentColor"
-            />
-          </svg>
-        </span>
-        <span class="brand__name">Baby Cam Cut</span>
-        <span id="liveBadge" class="live-badge hidden"><i></i>Live</span>
-      </header>
-
-      <main>
-        <!-- Camera stage: the live feed is the hero -->
-        <section id="stage" class="stage">
-          <video id="video" playsinline muted></video>
-          <canvas id="overlay"></canvas>
-
-          <div id="startNotice" class="start">
-            <div class="start__card">
-              <p class="start__eyebrow">Nursery watch</p>
-              <h1 class="start__title">Point a camera at your little one</h1>
-              <p class="start__sub">
-                Use this device as the camera, then watch from your phone —
-                the video streams straight between devices, never through a server.
-              </p>
-              <button id="startBtn" class="btn btn--primary btn--lg">Start camera</button>
-            </div>
-          </div>
-        </section>
-
-        <!-- Hidden canvas: the cropped region, used as the stream / pop-out source -->
-        <canvas id="zoom" class="hidden"></canvas>
-
-        <!-- Controls appear once the camera is running -->
-        <div id="controls" class="controls hidden">
-          <div class="camrow">
-            <label class="field">
-              <span class="field__label">Camera</span>
-              <select id="camSelect" class="select"></select>
-            </label>
-            <button id="flipBtn" class="btn btn--ghost btn--icon" title="Switch camera" aria-label="Switch camera">⟲</button>
-          </div>
-
-          <button id="goLiveBtn" class="btn btn--primary btn--lg btn--glow">Go live</button>
-
-          <p class="hint" id="cropHint">Drag on the video to watch just one region — or leave it to stream the whole view.</p>
-
-          <div class="minirow">
-            <button id="fullFrameBtn" class="btn btn--ghost hidden">Full frame</button>
-            <button id="pipBtn" class="btn btn--ghost" disabled>📌 Pop out</button>
-          </div>
-          <p id="pipHint" class="hint hidden"></p>
-
-          <p id="status" class="status"></p>
-        </div>
-
-        <!-- Share panel: link, QR, copy / share, and the permanent camera link -->
-        <section id="sharePanel" class="share hidden">
-          <div class="share__head">
-            <h2 class="share__title">Watch on another device</h2>
-            <p id="shareStatus" class="share__status"></p>
-          </div>
-
-          <div class="share__body">
-            <div class="share__qr">
-              <canvas id="qr" width="200" height="200"></canvas>
-            </div>
-            <div class="share__links">
-              <p class="share__label">Send this link to whoever's watching</p>
-              <a id="shareLink" class="link" href="#" target="_blank" rel="noopener"></a>
-              <div class="share__actions">
-                <button id="copyBtn" class="btn btn--soft">Copy link</button>
-                <button id="shareNativeBtn" class="btn btn--soft hidden">Share…</button>
-              </div>
-              <p class="share__warn">Anyone with the link can watch — keep it to people you trust.</p>
-            </div>
-          </div>
-
-          <div class="share__foot">
-            <p class="share__label">Your permanent camera link — bookmark it</p>
-            <a id="cameraLink" class="link link--muted" href="#"></a>
-            <p class="share__note">Opening it on any computer, any day, brings this same camera back.</p>
-          </div>
-        </section>
-      </main>
-
-      <footer class="foot">
-        <p class="foot__tag">Peer-to-peer · your video stays between your devices</p>
-        <nav class="foot__links">
-          <a href="/impressum">Impressum</a>
-          <span>·</span>
-          <a href="/datenschutz">Datenschutz</a>
-          <span>·</span>
-          <button id="diagBtn" class="linkish">Test connection</button>
-        </nav>
-        <p id="diagResult" class="foot__ver"></p>
-        <p class="foot__ver" id="version">v–</p>
-      </footer>
-    </div>
-
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-    <!-- Video mirroring the crop canvas, used for Picture-in-Picture. Kept
-         rendered-but-invisible (not display:none) because Safari refuses to
-         pop out a hidden video. -->
-    <video id="pipVideo" playsinline muted></video>
-
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
