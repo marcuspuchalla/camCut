@@ -1,13 +1,18 @@
 // Offline "hotel mode": connect two devices on the same hotspot with NO server
 // and NO internet, by exchanging the WebRTC handshake through QR codes.
 //
-// The handshake (SDP) is compressed, base64'd, split into chunks, and shown as
-// an animated sequence of QR codes. The other device scans the sequence with
-// its camera until it has every chunk, reassembles, and answers the same way.
+// Transport uses FOUNTAIN CODES (rateless erasure coding), the same idea as the
+// BC-UR animated QR used by air-gapped hardware wallets: the payload is split
+// into K blocks, and every QR frame carries a pseudo-random XOR mix of some
+// blocks. The receiver reconstructs the whole message after catching *any* ~K+
+// frames — it never has to wait for one specific frame, so a missed frame just
+// means one more frame later, not a rescan. We roll our own compact version
+// (Uint8Array + CRC32, no dependencies) because both ends are this same app, so
+// we don't need BC-UR's CBOR/Buffer wire-compatibility.
 
 import jsQR from "jsqr";
 
-// --- Compression (shrinks the SDP so it needs fewer QR frames) -------------
+// --- Compression (shrinks the SDP so it needs fewer blocks) ----------------
 async function gzip(str: string): Promise<Uint8Array> {
   const cs = new CompressionStream("gzip");
   const writer = cs.writable.getWriter();
@@ -35,100 +40,273 @@ function b64ToBytes(b64: string): Uint8Array {
   return a;
 }
 
-// --- Encode a payload into QR frame strings --------------------------------
-// Frame format:  B|<id>|<seq>|<total>|<enc>|<chunk>
-const CHUNK = 560; // base64 chars per QR — kept modest so phone cameras read it easily
+// --- CRC32 (integrity check on the reassembled message) --------------------
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes: Uint8Array): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
 
-export async function encodeFrames(text: string): Promise<string[]> {
-  const id = Math.random().toString(36).slice(2, 8);
-  let enc = "r";
-  let payload: string;
-  try {
-    if (typeof CompressionStream !== "undefined") {
-      payload = bytesToB64(await gzip(text));
-      enc = "g";
-    } else {
-      payload = btoa(unescape(encodeURIComponent(text)));
+// --- Deterministic PRNG so encoder and decoder pick the SAME block mixes ----
+function makeRng(seed: number) {
+  let s = seed >>> 0 || 0x1a2b3c4d;
+  const nextU32 = () => {
+    s ^= s << 13;
+    s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    s >>>= 0;
+    return s >>> 0;
+  };
+  return {
+    nextFloat: () => nextU32() / 0x100000000,
+    nextInt: (n: number) => nextU32() % n,
+  };
+}
+
+// Which source blocks does frame `seqNum` mix together? The first K frames are
+// the K "pure" blocks (fast path); after that, a seeded random XOR combination.
+function chooseIndices(seqNum: number, k: number): number[] {
+  if (seqNum <= k) return [seqNum - 1];
+  const rng = makeRng(((seqNum * 0x9e3779b1) ^ (k * 0x85ebca6b)) >>> 0);
+  // degree distribution weighted ~1/d (Ideal-Soliton-like) keeps decoding cheap
+  let total = 0;
+  for (let d = 1; d <= k; d++) total += 1 / d;
+  let r = rng.nextFloat() * total;
+  let degree = k;
+  for (let d = 1; d <= k; d++) {
+    r -= 1 / d;
+    if (r <= 0) {
+      degree = d;
+      break;
     }
-  } catch {
-    payload = btoa(unescape(encodeURIComponent(text)));
-    enc = "r";
   }
-  const chunks: string[] = [];
-  for (let i = 0; i < payload.length; i += CHUNK) chunks.push(payload.slice(i, i + CHUNK));
-  const total = chunks.length;
-  return chunks.map((c, seq) => `B|${id}|${seq}|${total}|${enc}|${c}`);
+  const set = new Set<number>();
+  while (set.size < degree) set.add(rng.nextInt(k));
+  return [...set];
 }
 
-// --- Collect scanned frames until a payload is complete --------------------
-export class FrameCollector {
-  private id: string | null = null;
-  private enc = "g";
-  private total = 0;
-  private parts = new Map<number, string>();
-
-  /** Returns true once every chunk of a message has been seen. */
-  add(frame: string): boolean {
-    const m = frame.match(/^B\|([^|]+)\|(\d+)\|(\d+)\|([gr])\|(.*)$/s);
-    if (!m) return false;
-    const [, id, seq, total, enc, chunk] = m;
-    if (this.id && this.id !== id) this.reset();
-    this.id = id;
-    this.enc = enc;
-    this.total = Number(total);
-    this.parts.set(Number(seq), chunk);
-    return this.parts.size === this.total && this.total > 0;
-  }
-
-  progress(): string {
-    return this.total ? `${this.parts.size}/${this.total}` : "";
-  }
-
-  reset() {
-    this.id = null;
-    this.total = 0;
-    this.parts.clear();
-  }
-
-  async text(): Promise<string> {
-    let b64 = "";
-    for (let i = 0; i < this.total; i++) b64 += this.parts.get(i) ?? "";
-    if (this.enc === "g") return gunzip(b64ToBytes(b64));
-    return decodeURIComponent(escape(atob(b64)));
-  }
+function xorInto(target: Uint8Array, src: Uint8Array) {
+  for (let i = 0; i < target.length; i++) target[i] ^= src[i];
 }
 
-// --- Animated QR display ---------------------------------------------------
-export interface AnimatedQR {
-  stop: () => void;
+const TAG = "B"; // frame prefix so the scanner ignores unrelated QR codes
+const HEADER = 14; // seqNum(4) + K(2) + msgLen(4) + crc(4)
+
+// --- Fountain encoder: rateless, call nextPart() forever -------------------
+export interface FountainEncoder {
+  nextPart(): string;
+  frameCount: number; // K — informational (min frames a perfect receiver needs)
 }
 
-// --- Scan QR frames from a camera until a full payload arrives --------------
-export function scanFrames(
+export async function createFountainEncoder(
+  text: string,
+  targetFragment = 96,
+): Promise<FountainEncoder> {
+  const msg = await gzip(text);
+  const msgLen = msg.length;
+  const k = Math.max(1, Math.ceil(msgLen / targetFragment));
+  const fragLen = Math.ceil(msgLen / k);
+  const crc = crc32(msg);
+
+  const blocks: Uint8Array[] = [];
+  for (let i = 0; i < k; i++) {
+    const b = new Uint8Array(fragLen);
+    b.set(msg.subarray(i * fragLen, Math.min((i + 1) * fragLen, msgLen)));
+    blocks.push(b);
+  }
+
+  let seqNum = 0;
+  return {
+    frameCount: k,
+    nextPart() {
+      seqNum++;
+      const mix = new Uint8Array(fragLen);
+      for (const idx of chooseIndices(seqNum, k)) xorInto(mix, blocks[idx]);
+
+      const out = new Uint8Array(HEADER + fragLen);
+      const dv = new DataView(out.buffer);
+      dv.setUint32(0, seqNum);
+      dv.setUint16(4, k);
+      dv.setUint32(6, msgLen);
+      dv.setUint32(10, crc);
+      out.set(mix, HEADER);
+      return TAG + bytesToB64(out);
+    },
+  };
+}
+
+// --- Fountain decoder ------------------------------------------------------
+export interface FountainDecoder {
+  receivePart(frame: string): void;
+  isComplete(): boolean;
+  progress(): number; // 0..1 — fraction of source blocks recovered
+  result(): Promise<string>;
+}
+
+export function createFountainDecoder(): FountainDecoder {
+  let k = 0;
+  let msgLen = 0;
+  let crc = 0;
+  let fragLen = 0;
+  let started = false;
+  const known = new Map<number, Uint8Array>();
+  let pending: { set: Set<number>; data: Uint8Array }[] = [];
+
+  const reduce = (set: Set<number>, data: Uint8Array) => {
+    for (const idx of [...set]) {
+      const kb = known.get(idx);
+      if (kb) {
+        xorInto(data, kb);
+        set.delete(idx);
+      }
+    }
+  };
+
+  // After learning a new block, cascade through pending mixes until stable.
+  const settle = () => {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const next: typeof pending = [];
+      for (const p of pending) {
+        reduce(p.set, p.data);
+        if (p.set.size === 0) continue; // fully cancelled, no info
+        if (p.set.size === 1) {
+          const idx = [...p.set][0];
+          if (!known.has(idx)) {
+            known.set(idx, p.data);
+            changed = true;
+          }
+          continue;
+        }
+        next.push(p);
+      }
+      pending = next;
+    }
+  };
+
+  return {
+    receivePart(frame: string) {
+      if (frame[0] !== TAG) return;
+      let bytes: Uint8Array;
+      try {
+        bytes = b64ToBytes(frame.slice(1));
+      } catch {
+        return;
+      }
+      if (bytes.length <= HEADER) return;
+      const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const seqNum = dv.getUint32(0);
+      const pk = dv.getUint16(4);
+      const pMsgLen = dv.getUint32(6);
+      const pCrc = dv.getUint32(10);
+
+      if (!started) {
+        k = pk;
+        msgLen = pMsgLen;
+        crc = pCrc;
+        fragLen = Math.ceil(msgLen / k);
+        started = true;
+      } else if (pk !== k || pMsgLen !== msgLen || pCrc !== crc) {
+        return; // a frame from a different message — ignore
+      }
+      if (bytes.length - HEADER < fragLen) return;
+
+      const set = new Set(chooseIndices(seqNum, k));
+      const data = bytes.slice(HEADER, HEADER + fragLen);
+      reduce(set, data);
+      if (set.size === 0) return;
+      if (set.size === 1) {
+        const idx = [...set][0];
+        if (!known.has(idx)) {
+          known.set(idx, data);
+          settle();
+        }
+        return;
+      }
+      pending.push({ set, data });
+      settle();
+    },
+    isComplete() {
+      return started && known.size === k;
+    },
+    progress() {
+      return started ? known.size / k : 0;
+    },
+    async result() {
+      const full = new Uint8Array(fragLen * k);
+      for (let i = 0; i < k; i++) full.set(known.get(i)!, i * fragLen);
+      const msg = full.subarray(0, msgLen);
+      if (crc32(msg) !== crc) throw new Error("checksum mismatch");
+      return gunzip(msg);
+    },
+  };
+}
+
+// --- Camera QR scanner: native BarcodeDetector, else jsQR fallback ---------
+// BarcodeDetector (Chromium / Vanadium / Android) decodes animated QR far more
+// reliably than jsQR; jsQR covers browsers without it (iOS Safari, Firefox).
+export interface QrScan {
+  done: Promise<string>; // resolves with the decoded text once complete
+  cancel: () => void;
+}
+
+export function scanQR(
   video: HTMLVideoElement,
-  scratch: HTMLCanvasElement,
-  onProgress: (p: string) => void,
-): { done: Promise<string>; cancel: () => void } {
-  const ctx = scratch.getContext("2d", { willReadFrequently: true })!;
-  const collector = new FrameCollector();
+  decoder: FountainDecoder,
+  onProgress: (p: number) => void,
+): QrScan {
   let cancelled = false;
+  const BD = (globalThis as any).BarcodeDetector;
+  let detector: any = null;
+  if (BD) {
+    try {
+      detector = new BD({ formats: ["qr_code"] });
+    } catch {
+      detector = null;
+    }
+  }
+  const scratch = document.createElement("canvas");
+  const ctx = detector ? null : scratch.getContext("2d", { willReadFrequently: true });
 
   const done = new Promise<string>((resolve, reject) => {
-    const tick = () => {
+    const handle = (raw: string | undefined) => {
+      if (raw && raw[0] === TAG) {
+        decoder.receivePart(raw);
+        onProgress(decoder.progress());
+      }
+    };
+    const tick = async () => {
       if (cancelled) return reject(new Error("cancelled"));
       if (video.readyState >= 2 && video.videoWidth) {
-        scratch.width = video.videoWidth;
-        scratch.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
-        const img = ctx.getImageData(0, 0, scratch.width, scratch.height);
-        const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
-        if (code && code.data.startsWith("B|")) {
-          const complete = collector.add(code.data);
-          onProgress(collector.progress());
-          if (complete) {
-            collector.text().then(resolve, reject);
-            return;
+        try {
+          if (detector) {
+            const codes = await detector.detect(video);
+            for (const c of codes) handle(c.rawValue);
+          } else if (ctx) {
+            scratch.width = video.videoWidth;
+            scratch.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            const img = ctx.getImageData(0, 0, scratch.width, scratch.height);
+            const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+            if (code) handle(code.data);
           }
+        } catch {
+          /* transient decode error — keep scanning */
+        }
+        if (decoder.isComplete()) {
+          decoder.result().then(resolve, reject);
+          return;
         }
       }
       requestAnimationFrame(tick);

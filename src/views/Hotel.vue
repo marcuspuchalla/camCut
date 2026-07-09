@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { ref, nextTick, onBeforeUnmount } from "vue";
+import { ref, computed, nextTick, onBeforeUnmount } from "vue";
 import BrandHeader from "../components/BrandHeader.vue";
 import DeviceNote from "../components/DeviceNote.vue";
 import AnimatedQr from "../components/AnimatedQr.vue";
 import {
-  encodeFrames,
-  scanFrames,
+  createFountainEncoder,
+  createFountainDecoder,
+  scanQR,
   createOffer,
   createAnswer,
   acceptAnswer,
+  type FountainEncoder,
 } from "../lib/offline";
 import { baseNotices } from "../composables/useCapabilities";
 
@@ -24,15 +26,15 @@ type Step =
 const role = ref<Role | null>(null);
 const step = ref<Step>("intro");
 const error = ref("");
-const progress = ref("");
+const progress = ref(0); // 0..1 while scanning
+const pct = computed(() => Math.round(progress.value * 100));
 
-const offerFrames = ref<string[]>([]);
-const answerFrames = ref<string[]>([]);
+const offerEnc = ref<FountainEncoder | null>(null);
+const answerEnc = ref<FountainEncoder | null>(null);
 
 const scanVideo = ref<HTMLVideoElement>();
 const recvVideo = ref<HTMLVideoElement>();
 const recvStream = ref<MediaStream | null>(null);
-const scratch = document.createElement("canvas");
 
 const blockers = baseNotices().filter((n) => n.severity === "blocker");
 
@@ -56,6 +58,14 @@ async function getRearCamera(): Promise<MediaStream> {
   });
 }
 
+function startScan(): Promise<string> {
+  progress.value = 0;
+  const dec = createFountainDecoder();
+  const { done, cancel } = scanQR(scanVideo.value!, dec, (p) => (progress.value = p));
+  scanCancel = cancel;
+  return done;
+}
+
 /* ---------------- camera role (offerer) ---------------- */
 async function beCamera() {
   error.value = "";
@@ -65,7 +75,7 @@ async function beCamera() {
     const res = await createOffer(cameraStream);
     pc = res.pc;
     watchPc(pc);
-    offerFrames.value = await encodeFrames(res.sdp);
+    offerEnc.value = await createFountainEncoder(res.sdp);
     step.value = "show-offer";
   } catch (e: any) {
     error.value = friendly(e);
@@ -81,9 +91,7 @@ async function scanReply() {
       scanVideo.value.srcObject = cameraStream;
       await scanVideo.value.play().catch(() => {});
     }
-    const { done, cancel } = scanFrames(scanVideo.value!, scratch, (p) => (progress.value = p));
-    scanCancel = cancel;
-    const answerSdp = await done;
+    const answerSdp = await startScan();
     await acceptAnswer(pc!, answerSdp);
     step.value = "connected";
   } catch (e: any) {
@@ -103,9 +111,7 @@ async function beViewer() {
       scanVideo.value.srcObject = scanStream;
       await scanVideo.value.play().catch(() => {});
     }
-    const { done, cancel } = scanFrames(scanVideo.value!, scratch, (p) => (progress.value = p));
-    scanCancel = cancel;
-    const offerSdp = await done;
+    const offerSdp = await startScan();
 
     const res = await createAnswer(offerSdp, (stream) => {
       // ontrack fires while we're still showing the answer QR, before the
@@ -125,7 +131,7 @@ async function beViewer() {
     // Scanning camera no longer needed — free it.
     scanStream.getTracks().forEach((t) => t.stop());
     scanStream = null;
-    answerFrames.value = await encodeFrames(res.sdp);
+    answerEnc.value = await createFountainEncoder(res.sdp);
     step.value = "show-answer";
   } catch (e: any) {
     if (String(e?.message) !== "cancelled") error.value = friendly(e);
@@ -148,9 +154,9 @@ function reset() {
   scanStream?.getTracks().forEach((t) => t.stop());
   cameraStream = scanStream = null;
   recvStream.value = null;
-  offerFrames.value = [];
-  answerFrames.value = [];
-  progress.value = "";
+  offerEnc.value = null;
+  answerEnc.value = null;
+  progress.value = 0;
   error.value = "";
   role.value = null;
   step.value = "intro";
@@ -211,10 +217,11 @@ onBeforeUnmount(() => {
     <template v-else-if="step === 'show-offer'">
       <p class="font-round font-bold text-lg mb-1">Step 1 — show this to the watcher</p>
       <p class="text-muted text-sm mb-4">
-        On the watching phone, choose “This phone watches” and point it at this code until it fills up.
+        On the watching phone, choose “This phone watches” and point it at this code. The codes cycle — it's fine
+        if the watcher misses a few.
       </p>
       <div class="grid place-items-center mb-5">
-        <AnimatedQr :frames="offerFrames" :size="260" />
+        <AnimatedQr v-if="offerEnc" :next="offerEnc.nextPart" :size="260" />
       </div>
       <button
         class="rounded-xl bg-glow-a text-night-800 px-5 py-3 font-round font-bold self-center flex items-center gap-2"
@@ -224,26 +231,29 @@ onBeforeUnmount(() => {
       </button>
     </template>
 
-    <!-- camera: scan answer -->
-    <template v-else-if="step === 'scan-answer'">
-      <p class="font-round font-bold text-lg mb-1">Step 2 — scan the watcher's reply</p>
-      <p class="text-muted text-sm mb-4">Point this phone at the code shown on the watching phone.</p>
+    <!-- camera: scan answer / viewer: scan offer (shared scanner UI) -->
+    <template v-else-if="step === 'scan-answer' || step === 'scan-offer'">
+      <p class="font-round font-bold text-lg mb-1">
+        {{ step === "scan-offer" ? "Step 1 — scan the camera phone" : "Step 2 — scan the watcher's reply" }}
+      </p>
+      <p class="text-muted text-sm mb-4">Point this phone at the code on the other phone and hold steady.</p>
       <div class="relative rounded-2xl overflow-hidden bg-black border border-line aspect-video">
         <video ref="scanVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
         <div class="absolute inset-0 border-2 border-glow-a/60 m-10 rounded-xl pointer-events-none"></div>
       </div>
-      <p class="text-center text-muted2 text-sm mt-3 font-mono">{{ progress || "looking for code…" }}</p>
-    </template>
-
-    <!-- viewer: scan offer -->
-    <template v-else-if="step === 'scan-offer'">
-      <p class="font-round font-bold text-lg mb-1">Step 1 — scan the camera phone</p>
-      <p class="text-muted text-sm mb-4">Point this phone at the code shown on the camera phone.</p>
-      <div class="relative rounded-2xl overflow-hidden bg-black border border-line aspect-video">
-        <video ref="scanVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
-        <div class="absolute inset-0 border-2 border-glow-a/60 m-10 rounded-xl pointer-events-none"></div>
+      <!-- progress bar -->
+      <div class="mt-4">
+        <div class="h-2.5 rounded-full bg-night-700 overflow-hidden">
+          <div
+            class="h-full bg-glow-a transition-all duration-200"
+            :class="{ 'animate-pulse': pct === 0 }"
+            :style="{ width: `${Math.max(pct, pct === 0 ? 8 : pct)}%` }"
+          ></div>
+        </div>
+        <p class="text-center text-muted2 text-sm mt-2 font-mono">
+          {{ pct === 0 ? "looking for code…" : `receiving ${pct}%` }}
+        </p>
       </div>
-      <p class="text-center text-muted2 text-sm mt-3 font-mono">{{ progress || "looking for code…" }}</p>
     </template>
 
     <!-- viewer: show answer -->
@@ -254,7 +264,7 @@ onBeforeUnmount(() => {
         automatically once it connects.
       </p>
       <div class="grid place-items-center">
-        <AnimatedQr :frames="answerFrames" :size="260" />
+        <AnimatedQr v-if="answerEnc" :next="answerEnc.nextPart" :size="260" />
       </div>
     </template>
 
