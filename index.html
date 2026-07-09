@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>camCut — webcam region zoom</title>
+    <title>Baby Cam Cut</title>
   </head>
   <body>
     <header>
-      <h1>camCut</h1>
-      <p class="hint">Drag a box on the live feed to zoom into that region.</p>
+      <h1>👶 Baby Cam Cut</h1>
+      <p class="hint">Drag a box on the live feed, then watch just that region on your phone.</p>
     </header>
 
     <main>
@@ -39,11 +39,15 @@
       <section id="sharePanel" class="share-panel hidden">
         <canvas id="qr" width="220" height="220"></canvas>
         <div class="share-info">
-          <p class="share-title">Open on your phone</p>
-          <p class="share-sub">On the same Wi-Fi, scan this code or open:</p>
+          <p class="share-title">Open on the phone</p>
+          <p class="share-sub">Scan this code, or open this link on the phone (share it once — it stays the same every day):</p>
           <a id="shareLink" class="share-link" href="#" target="_blank" rel="noopener"></a>
           <p id="shareStatus" class="share-status"></p>
-          <p class="share-warn">⚠ Anyone on your Wi-Fi with this link can watch.</p>
+          <p class="share-warn">⚠ Anyone with this link can watch the stream.</p>
+
+          <div class="share-divider"></div>
+          <p class="share-sub">📌 <strong>Bookmark this page</strong> — it's your permanent camera link. The same link resumes this camera on any computer, any day:</p>
+          <a id="cameraLink" class="share-link camera-link" href="#"></a>
         </div>
       </section>
     </main>

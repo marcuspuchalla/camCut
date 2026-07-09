@@ -74,8 +74,10 @@ function connect() {
   ws.onerror = () => ws?.close();
 }
 
+const room = new URLSearchParams(location.search).get("room") || "";
+
 function join() {
-  ws?.send(JSON.stringify({ type: "viewer-join" }));
+  ws?.send(JSON.stringify({ type: "viewer-join", room }));
 }
 
 function setupPeer() {

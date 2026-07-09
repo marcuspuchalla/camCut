@@ -22,15 +22,61 @@ const sharePanel = document.getElementById("sharePanel") as HTMLElement;
 const qrCanvas = document.getElementById("qr") as HTMLCanvasElement;
 const shareLink = document.getElementById("shareLink") as HTMLAnchorElement;
 const shareStatus = document.getElementById("shareStatus") as HTMLParagraphElement;
+const cameraLink = document.getElementById("cameraLink") as HTMLAnchorElement;
 
 const octx = overlay.getContext("2d")!;
 const zctx = zoom.getContext("2d")!;
+
+// --- Room identity --------------------------------------------------------
+// Each camera has a stable room id that lives in the page URL. Bookmark the
+// page and the same id (hence the same camera + phone link) comes back on any
+// computer, any day. Falls back to localStorage, then a fresh UUID.
+function makeRoomId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+const room =
+  new URLSearchParams(location.search).get("room") ||
+  localStorage.getItem("bcc-room") ||
+  makeRoomId();
+localStorage.setItem("bcc-room", room);
+{
+  // Reflect the room in the URL so this page is directly bookmarkable.
+  const u = new URL(location.href);
+  if (u.searchParams.get("room") !== room) {
+    u.searchParams.set("room", room);
+    history.replaceState(null, "", u);
+  }
+  cameraLink.textContent = u.href;
+  cameraLink.href = u.href;
+}
 
 // --- State ----------------------------------------------------------------
 // Selection is stored normalized (0..1) relative to the video frame so it
 // stays correct regardless of how the video is displayed/resized.
 interface Rect { x: number; y: number; w: number; h: number; }
-let selection: Rect | null = null;
+
+// Persist the last region (normalized, so resolution-independent) so you don't
+// have to re-draw the box every day.
+const SEL_KEY = "bcc-selection";
+function loadSelection(): Rect | null {
+  try {
+    const s = localStorage.getItem(SEL_KEY);
+    return s ? (JSON.parse(s) as Rect) : null;
+  } catch {
+    return null;
+  }
+}
+
+let selection: Rect | null = loadSelection();
+
+function saveSelection() {
+  if (selection) localStorage.setItem(SEL_KEY, JSON.stringify(selection));
+}
 
 let dragging = false;
 let dragStart = { x: 0, y: 0 }; // in overlay-canvas pixels
@@ -57,7 +103,14 @@ async function startWebcam() {
     await video.play();
     startNotice.classList.add("hidden");
     syncOverlaySize();
-    setStatus("Drag a box on the feed to mark a region.");
+    if (selection) {
+      // A region from a previous session was restored.
+      enableRegionButtons();
+      drawOverlay();
+      setStatus("Restored your saved region. Share to phone, or drag a new box.");
+    } else {
+      setStatus("Drag a box on the feed to mark a region.");
+    }
   } catch (err) {
     setStatus("Could not access the webcam: " + (err as Error).message);
   }
@@ -159,13 +212,18 @@ overlay.addEventListener("pointerup", () => {
     h: box.h / overlay.height,
   };
 
+  saveSelection();
+  enableRegionButtons();
+  setStatus("Region marked. Zoom in, pop out, or share to your phone.");
+  drawOverlay();
+});
+
+function enableRegionButtons() {
   zoomBtn.disabled = false;
   pipBtn.disabled = false;
   shareBtn.disabled = false;
   clearBtn.disabled = false;
-  setStatus("Region marked. Zoom in, pop out, or share to your phone.");
-  drawOverlay();
-});
+}
 
 // --- Zoom render loop -----------------------------------------------------
 // The loop draws the selected region into the zoom canvas. It runs whenever
@@ -282,16 +340,7 @@ async function startSharing() {
   startRender();
   if (!shareStream) shareStream = zoom.captureStream(30);
 
-  // Build the phone-facing link + QR from the PC's LAN IP.
-  let host = location.host;
-  try {
-    const info = await fetch("/api/lan-info").then((r) => r.json());
-    const ip: string | undefined = info.ips?.[0];
-    if (ip) host = `${ip}:${location.port || "5188"}`;
-  } catch {
-    /* fall back to current host */
-  }
-  const url = `http://${host}/view.html`;
+  const url = `${await viewerBase()}/view?room=${encodeURIComponent(room)}`;
   shareLink.textContent = url;
   shareLink.href = url;
   QRCode.toCanvas(qrCanvas, url, { width: 220, margin: 1 }).catch(() => {});
@@ -303,13 +352,33 @@ async function startSharing() {
   connectSignaling();
 }
 
+// The phone link uses the deployed domain when hosted; when testing locally on
+// localhost, it swaps in the machine's LAN IP so a real phone can reach it.
+async function viewerBase(): Promise<string> {
+  const local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  if (local) {
+    try {
+      const info = await fetch("/api/lan-info").then((r) => r.json());
+      const ip: string | undefined = info.ips?.[0];
+      if (ip) return `http://${ip}:${location.port || "5188"}`;
+    } catch {
+      /* fall back below */
+    }
+  }
+  return location.origin;
+}
+
 function connectSignaling() {
   signalWs = new WebSocket(`ws://${location.host}/signal`);
-  signalWs.onopen = () => signalWs?.send(JSON.stringify({ type: "publisher" }));
+  signalWs.onopen = () => signalWs?.send(JSON.stringify({ type: "publisher", room }));
   signalWs.onmessage = async (ev) => {
     const msg = JSON.parse(ev.data);
     if (msg.type === "viewer-join") {
       await createPeer(msg.viewerId);
+    } else if (msg.type === "replaced") {
+      // This camera link was opened somewhere else; that copy is now live.
+      setShareStatus("This camera was opened on another device — sharing paused here.");
+      stopSharing();
     } else if (msg.type === "answer") {
       await peers.get(msg.viewerId)?.setRemoteDescription(msg.sdp);
     } else if (msg.type === "ice" && msg.viewerId != null) {
@@ -392,6 +461,7 @@ clearBtn.addEventListener("click", async () => {
   }
   if (!zoomPanel.classList.contains("hidden")) editBtn.click();
   selection = null;
+  localStorage.removeItem(SEL_KEY);
   zoomBtn.disabled = true;
   pipBtn.disabled = true;
   shareBtn.disabled = true;
