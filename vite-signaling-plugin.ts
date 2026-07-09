@@ -49,6 +49,7 @@ export function signalingPlugin(): Plugin {
             case "publisher":
               publisher = ws;
               ws.role = "publisher";
+              console.log("[camCut] publisher connected");
               // Nudge any viewers that were waiting for a publisher.
               for (const v of viewers.values()) send(v, { type: "publisher-ready" });
               break;
@@ -61,6 +62,9 @@ export function signalingPlugin(): Plugin {
                 ws.viewerId = id;
                 viewers.set(id, ws);
               }
+              console.log(
+                `[camCut] viewer ${id} joined (publisher ${publisher ? "present" : "absent"})`,
+              );
               if (publisher) send(publisher, { type: "viewer-join", viewerId: id });
               else send(ws, { type: "no-publisher" });
               break;

@@ -84,8 +84,9 @@ function setupPeer() {
 
   pc.ontrack = (e) => {
     video.srcObject = e.streams[0];
-    video.play().catch(() => {});
-    hideOverlay();
+    // Don't hide the overlay yet — wait for the video to actually play (below).
+    // Autoplay of a WebRTC stream is blocked on some phones until you tap.
+    video.play().catch(() => showOverlay("Tap to start video"));
     requestWakeLock();
   };
 
@@ -93,12 +94,18 @@ function setupPeer() {
     if (e.candidate) ws?.send(JSON.stringify({ type: "ice", candidate: e.candidate }));
   };
 
-  pc.onconnectionstatechange = () => {
-    if (pc && ["failed", "disconnected"].includes(pc.connectionState)) {
-      showOverlay("Connection lost. Reconnecting…");
-    }
+  pc.oniceconnectionstatechange = () => {
+    const s = pc?.iceConnectionState;
+    console.log("[camCut] ice:", s);
+    if (s === "checking") showOverlay("Connecting to PC…");
+    else if (s === "failed") showOverlay("Couldn't connect. Check you're on the same Wi-Fi.");
+    else if (s === "disconnected") showOverlay("Connection dropped. Reconnecting…");
   };
 }
+
+// Overlay hides only once frames are truly rendering — so a stalled/black
+// stream shows a status message instead of a mysterious black screen.
+video.addEventListener("playing", hideOverlay);
 
 function scheduleReconnect() {
   clearTimeout(reconnectTimer);
@@ -121,8 +128,10 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && video.srcObject) requestWakeLock();
 });
 
-// Tap anywhere to toggle fullscreen.
+// Tap anywhere: make sure playback is running (covers autoplay blocks), then
+// toggle fullscreen.
 document.addEventListener("click", () => {
+  if (video.srcObject && video.paused) video.play().catch(() => {});
   if (!document.fullscreenElement) {
     document.documentElement.requestFullscreen?.().catch(() => {});
   } else {

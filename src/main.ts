@@ -36,7 +36,7 @@ let dragging = false;
 let dragStart = { x: 0, y: 0 }; // in overlay-canvas pixels
 let dragNow = { x: 0, y: 0 };
 
-let zoomRAF = 0;
+let zoomTimer = 0;
 let sharing = false;
 
 function setStatus(msg: string) {
@@ -172,7 +172,7 @@ overlay.addEventListener("pointerup", () => {
 // the zoom panel is shown OR a Picture-in-Picture window is open, so both can
 // share the same live source.
 function startRender() {
-  if (zoomRAF || !selection) return;
+  if (zoomTimer || !selection) return;
   const sel = selection;
   const vw = video.videoWidth;
   const vh = video.videoHeight;
@@ -187,20 +187,21 @@ function startRender() {
   zoom.width = sw;
   zoom.height = sh;
 
-  const render = () => {
-    zctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
-    zoomRAF = requestAnimationFrame(render);
-  };
+  // A timer (not requestAnimationFrame) drives the draw so the crop keeps
+  // updating even when the PC window loses focus — otherwise the captured
+  // stream would freeze to black the moment you look away (e.g. at your phone).
+  const render = () => zctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
   render();
+  zoomTimer = window.setInterval(render, 1000 / 30);
 }
 
 function stopRenderIfIdle() {
   // Only stop drawing when no consumer (panel, PiP, or phone share) needs frames.
   const pipOpen = document.pictureInPictureElement === pipVideo;
   const panelOpen = !zoomPanel.classList.contains("hidden");
-  if (!pipOpen && !panelOpen && !sharing && zoomRAF) {
-    cancelAnimationFrame(zoomRAF);
-    zoomRAF = 0;
+  if (!pipOpen && !panelOpen && !sharing && zoomTimer) {
+    clearInterval(zoomTimer);
+    zoomTimer = 0;
   }
 }
 
@@ -340,6 +341,7 @@ async function createPeer(viewerId: number) {
     }
   };
   pc.onconnectionstatechange = () => {
+    console.log(`[camCut] viewer ${viewerId} connection: ${pc.connectionState}`);
     if (["failed", "closed", "disconnected"].includes(pc.connectionState)) {
       peers.delete(viewerId);
     }
@@ -352,8 +354,16 @@ async function createPeer(viewerId: number) {
 }
 
 function updateViewerCount() {
-  const n = [...peers.values()].filter((p) => p.connectionState === "connected").length;
-  setShareStatus(n > 0 ? `📶 ${n} phone${n === 1 ? "" : "s"} watching.` : "Waiting for a phone to connect…");
+  const states = [...peers.values()].map((p) => p.connectionState);
+  const connected = states.filter((s) => s === "connected").length;
+  const connecting = states.filter((s) => s === "connecting" || s === "new").length;
+  if (connected > 0) {
+    setShareStatus(`📶 ${connected} phone${connected === 1 ? "" : "s"} watching.`);
+  } else if (connecting > 0) {
+    setShareStatus(`Connecting to a phone… (${connecting})`);
+  } else {
+    setShareStatus("Waiting for a phone to connect…");
+  }
 }
 
 function stopSharing() {
