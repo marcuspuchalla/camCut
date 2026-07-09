@@ -27,6 +27,10 @@ const copyBtn = document.getElementById("copyBtn") as HTMLButtonElement;
 const shareNativeBtn = document.getElementById("shareNativeBtn") as HTMLButtonElement;
 const toast = document.getElementById("toast") as HTMLElement;
 
+const pipHint = document.getElementById("pipHint") as HTMLElement;
+const diagBtn = document.getElementById("diagBtn") as HTMLButtonElement;
+const diagResult = document.getElementById("diagResult") as HTMLParagraphElement;
+
 const octx = overlay.getContext("2d")!;
 const zctx = zoom.getContext("2d")!;
 
@@ -499,5 +503,44 @@ pipVideo.addEventListener("webkitpresentationmodechanged", () => {
   }
 });
 
-// Hide the button only where no form of PiP exists (e.g. most mobile browsers).
-if (!pipSupported()) pipBtn.classList.add("hidden");
+// Firefox blocks script-triggered PiP, and most mobile browsers have none. Hide
+// the button there and, on desktop Firefox, explain the browser's own PiP.
+if (!pipSupported()) {
+  pipBtn.classList.add("hidden");
+  if (navigator.userAgent.includes("Firefox")) {
+    pipHint.textContent =
+      "Firefox can't open pop-out from a page. Hover the video and click Firefox's own Picture-in-Picture icon — or use Chrome, Edge or Safari.";
+    pipHint.classList.remove("hidden");
+  }
+}
+
+// --- Connection self-test -------------------------------------------------
+// Gathers ICE candidates and reports whether direct (STUN) and relay (TURN)
+// paths are available — so a failed phone connection can be pinpointed.
+diagBtn.addEventListener("click", async () => {
+  diagBtn.disabled = true;
+  diagResult.textContent = "Testing connection… (5s)";
+  try {
+    const ice = await fetch("/api/ice").then((r) => r.json());
+    const pc = new RTCPeerConnection({ iceServers: ice.iceServers });
+    pc.createDataChannel("t");
+    const types = new Set<string>();
+    pc.onicecandidate = (e) => {
+      const m = e.candidate?.candidate.match(/ typ (\w+)/);
+      if (m) types.add(m[1]);
+    };
+    await pc.setLocalDescription(await pc.createOffer());
+    await new Promise((r) => setTimeout(r, 5000));
+    pc.close();
+
+    const hasDirect = types.has("srflx") || types.has("host");
+    const hasRelay = types.has("relay");
+    diagResult.textContent =
+      `Direct path (STUN): ${hasDirect ? "✓" : "✗"} · ` +
+      `Relay (TURN): ${hasRelay ? "✓" : "✗ — cross-network won't work"}`;
+  } catch (err) {
+    diagResult.textContent = "Test failed: " + (err as Error).message;
+  } finally {
+    diagBtn.disabled = false;
+  }
+});
