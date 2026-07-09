@@ -300,7 +300,15 @@ body {
   color: var(--muted-2);
   font-size: 0.78rem;
   padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
+.foot__tag { margin: 0; }
+.foot__links { display: flex; gap: 8px; justify-content: center; }
+.foot__links a { color: var(--muted); text-decoration: none; }
+.foot__links a:hover { color: var(--moon); text-decoration: underline; }
+.foot__ver { margin: 0; font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted-2); }
 
 /* ---- Toast ---- */
 .toast {

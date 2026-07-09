@@ -30,6 +30,9 @@ const toast = document.getElementById("toast") as HTMLElement;
 const octx = overlay.getContext("2d")!;
 const zctx = zoom.getContext("2d")!;
 
+// Deployed-version marker so it's obvious which build is live.
+document.getElementById("version")!.textContent = `v${__APP_VERSION__} · built ${__BUILD_TIME__}`;
+
 // --- Room identity --------------------------------------------------------
 // A stable room id lives in the page URL so the camera + viewer links stay the
 // same across days and computers. Bookmark the page once and it comes back.
@@ -284,9 +287,19 @@ function stopRenderIfIdle() {
 }
 
 // --- Go live (publish over WebRTC) ----------------------------------------
-const RTC_CONFIG: RTCConfiguration = {
+// ICE servers come from the server (so a TURN relay can be added there without
+// rebuilding). Falls back to public STUN.
+let rtcConfig: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 };
+async function loadIceConfig() {
+  try {
+    const data = await fetch("/api/ice").then((r) => r.json());
+    if (data.iceServers?.length) rtcConfig = { iceServers: data.iceServers };
+  } catch {
+    /* keep the STUN fallback */
+  }
+}
 
 let signalWs: WebSocket | null = null;
 let shareStream: MediaStream | null = null;
@@ -297,6 +310,7 @@ goLiveBtn.addEventListener("click", () => (sharing ? stopLive() : goLive()));
 async function goLive() {
   if (!camStream) return;
   sharing = true;
+  await loadIceConfig();
   startRender();
   if (!shareStream) shareStream = zoom.captureStream(30);
 
@@ -381,7 +395,7 @@ function connectSignaling() {
 
 async function createPeer(viewerId: number) {
   peers.get(viewerId)?.close();
-  const pc = new RTCPeerConnection(RTC_CONFIG);
+  const pc = new RTCPeerConnection(rtcConfig);
   peers.set(viewerId, pc);
 
   shareStream!.getTracks().forEach((t) => pc.addTrack(t, shareStream!));

@@ -20,11 +20,17 @@ export function signalingPlugin(): Plugin {
         wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
       });
 
-      // Pretty /view route -> view.html (production server does the same).
+      // Pretty routes -> .html (production server does the same).
+      const pretty: Record<string, string> = {
+        "/view": "/view.html",
+        "/impressum": "/impressum.html",
+        "/datenschutz": "/datenschutz.html",
+      };
       server.middlewares.use((req, _res, next) => {
-        if (req.url && req.url.split("?")[0] === "/view") {
-          const q = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
-          req.url = "/view.html" + q;
+        const path = (req.url ?? "").split("?")[0];
+        if (pretty[path]) {
+          const q = req.url!.includes("?") ? req.url!.slice(req.url!.indexOf("?")) : "";
+          req.url = pretty[path] + q;
         }
         next();
       });
@@ -32,6 +38,21 @@ export function signalingPlugin(): Plugin {
       server.middlewares.use("/api/lan-info", (_req, res) => {
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify({ ips: getLanIps() }));
+      });
+
+      server.middlewares.use("/api/ice", (_req, res) => {
+        const iceServers: unknown[] = [
+          { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+        ];
+        if (process.env.TURN_URL) {
+          iceServers.push({
+            urls: process.env.TURN_URL.split(",").map((s) => s.trim()),
+            username: process.env.TURN_USERNAME || "",
+            credential: process.env.TURN_CREDENTIAL || "",
+          });
+        }
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ iceServers }));
       });
     },
   };

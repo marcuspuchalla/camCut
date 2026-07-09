@@ -38,6 +38,24 @@ function serveFile(res, filePath) {
   });
 }
 
+// ICE servers offered to the browser. STUN helps devices find a direct path;
+// a TURN relay (set via env) is the fallback for networks that block direct
+// peer-to-peer (strict NAT, Wi-Fi client isolation, different networks).
+//   TURN_URL=turn:turn.example.com:3478   TURN_USERNAME=...   TURN_CREDENTIAL=...
+function iceServers() {
+  const servers = [
+    { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+  ];
+  if (process.env.TURN_URL) {
+    servers.push({
+      urls: process.env.TURN_URL.split(",").map((s) => s.trim()),
+      username: process.env.TURN_USERNAME || "",
+      credential: process.env.TURN_CREDENTIAL || "",
+    });
+  }
+  return servers;
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   let pathname = url.pathname;
@@ -48,9 +66,17 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (pathname === "/api/ice") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ iceServers: iceServers() }));
+    return;
+  }
+
   // Pretty routes.
   if (pathname === "/") pathname = "/index.html";
   else if (pathname === "/view") pathname = "/view.html";
+  else if (pathname === "/impressum") pathname = "/impressum.html";
+  else if (pathname === "/datenschutz") pathname = "/datenschutz.html";
 
   // Resolve inside DIST, guarding against path traversal.
   const safe = path.normalize(pathname).replace(/^(\.\.[/\\])+/, "");

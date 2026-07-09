@@ -7,11 +7,19 @@ const overlay = document.getElementById("overlay") as HTMLElement;
 const msg = document.getElementById("msg") as HTMLElement;
 const popout = document.getElementById("popout") as HTMLButtonElement;
 
-// STUN helps candidate discovery; on a home LAN, host/mDNS candidates connect
-// even without internet.
-const RTC_CONFIG: RTCConfiguration = {
+// ICE servers come from the server so a TURN relay can be added without a
+// rebuild; falls back to public STUN.
+let rtcConfig: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 };
+async function loadIceConfig() {
+  try {
+    const data = await fetch("/api/ice").then((r) => r.json());
+    if (data.iceServers?.length) rtcConfig = { iceServers: data.iceServers };
+  } catch {
+    /* keep the STUN fallback */
+  }
+}
 
 let ws: WebSocket | null = null;
 let pc: RTCPeerConnection | null = null;
@@ -110,7 +118,7 @@ function join() {
 
 function setupPeer() {
   teardownPeer();
-  pc = new RTCPeerConnection(RTC_CONFIG);
+  pc = new RTCPeerConnection(rtcConfig);
 
   pc.ontrack = (e) => {
     video.srcObject = e.streams[0];
@@ -172,4 +180,4 @@ document.addEventListener("click", () => {
   }
 });
 
-connect();
+loadIceConfig().then(connect);
