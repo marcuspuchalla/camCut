@@ -158,6 +158,7 @@ async function beCamera() {
   logs.value = [];
   t0 = performance.now();
   role.value = "camera";
+  log(`build v${__APP_VERSION__} · ${__BUILD_TIME__}`);
   log("role: camera (sending video)");
   try {
     cameraStream.value = await getRearCamera();
@@ -206,6 +207,7 @@ async function beViewer() {
   logs.value = [];
   t0 = performance.now();
   role.value = "viewer";
+  log(`build v${__APP_VERSION__} · ${__BUILD_TIME__}`);
   log("role: watcher (receiving video)");
   step.value = "scan-offer";
   await nextTick();
