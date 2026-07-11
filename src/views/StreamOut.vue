@@ -121,7 +121,7 @@ onBeforeUnmount(stopLive);
 </script>
 
 <template>
-  <div class="max-w-xl mx-auto px-5 py-6 min-h-dvh flex flex-col">
+  <div class="w-full max-w-xl mx-auto px-5 py-6 flex-1 flex flex-col">
     <BrandHeader back :live="live" />
 
     <div v-if="blockers.length" class="flex flex-col gap-2.5 mb-4">

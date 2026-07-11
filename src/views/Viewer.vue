@@ -40,7 +40,7 @@ onBeforeUnmount(() => viewer?.stop());
 </script>
 
 <template>
-  <div class="fixed inset-0 bg-black flex flex-col">
+  <div class="fixed inset-0 z-50 bg-black flex flex-col">
     <video
       ref="videoEl"
       autoplay

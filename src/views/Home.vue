@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from "vue-router";
 import BrandHeader from "../components/BrandHeader.vue";
-import AppFooter from "../components/AppFooter.vue";
 import DeviceNote from "../components/DeviceNote.vue";
 import { useCapabilities } from "../composables/useCapabilities";
 
@@ -31,7 +30,7 @@ const modes = [
 </script>
 
 <template>
-  <div class="max-w-xl mx-auto px-5 py-6 min-h-dvh flex flex-col">
+  <div class="w-full max-w-xl mx-auto px-5 py-6 flex-1 flex flex-col">
     <BrandHeader />
 
     <div class="mb-6">
@@ -58,7 +57,5 @@ const modes = [
         <i class="pi pi-chevron-right text-muted2 mt-2"></i>
       </button>
     </div>
-
-    <AppFooter />
   </div>
 </template>

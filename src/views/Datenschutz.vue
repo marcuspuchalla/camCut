@@ -3,7 +3,7 @@ import { RouterLink } from "vue-router";
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto px-5 py-10 leading-relaxed text-[#c7ccea]">
+  <div class="w-full flex-1 max-w-2xl mx-auto px-5 py-10 leading-relaxed text-[#c7ccea]">
     <RouterLink to="/" class="font-round font-semibold text-[#ffd0a8] no-underline hover:underline">← Zurück</RouterLink>
     <h1 class="font-round font-bold text-2xl mt-6 mb-2 text-ink">Datenschutzerklärung</h1>
 

@@ -5,7 +5,9 @@ const version = `v${__APP_VERSION__} · built ${__BUILD_TIME__}`;
 </script>
 
 <template>
-  <footer class="mt-auto pt-4 text-center text-muted2 text-xs flex flex-col gap-1.5">
+  <footer
+    class="shrink-0 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-line text-center text-muted2 text-xs flex flex-col gap-1.5"
+  >
     <p class="m-0">Peer-to-peer · your video stays between your devices</p>
     <nav class="flex gap-2 justify-center">
       <RouterLink to="/impressum" class="text-muted hover:text-moon">Impressum</RouterLink>
