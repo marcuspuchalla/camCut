@@ -318,8 +318,32 @@ export function scanQR(
 }
 
 // --- WebRTC over manual (QR) signaling -------------------------------------
-// No ICE servers: on the same hotspot, direct host candidates connect. Cap the
-// gather wait so we don't hang if a candidate is slow.
+// The QR handshake replaces the *signaling server*, but the media path still
+// needs ICE. With no ICE servers only host candidates are found → same network
+// only. Adding STUN/TURN (when online) puts srflx/relay candidates into the SDP
+// that's carried by the QR, so two devices on *different* networks can connect
+// serverlessly too. Offline (no internet) STUN/TURN simply don't resolve and we
+// fall back to host candidates → same-network still works.
+
+const STUN: RTCIceServer = { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] };
+
+/** Fetch STUN+TURN from the server; fall back to public STUN (or nothing offline). */
+export async function getHotelIceServers(): Promise<RTCIceServer[]> {
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 2500);
+    const r = await fetch("/api/ice", { signal: ctrl.signal });
+    clearTimeout(to);
+    const j = await r.json();
+    if (Array.isArray(j.iceServers) && j.iceServers.length) return j.iceServers;
+  } catch {
+    /* offline or server unreachable */
+  }
+  return [STUN];
+}
+
+// Wait until ICE gathering completes so the one-shot SDP carries every
+// candidate (host + srflx + relay). Capped so a slow TURN server can't hang us.
 function waitIceComplete(pc: RTCPeerConnection): Promise<void> {
   return new Promise((resolve) => {
     if (pc.iceGatheringState === "complete") return resolve();
@@ -330,24 +354,43 @@ function waitIceComplete(pc: RTCPeerConnection): Promise<void> {
       }
     };
     pc.addEventListener("icegatheringstatechange", check);
-    setTimeout(resolve, 3000);
+    setTimeout(resolve, 5000);
   });
 }
 
-export async function createOffer(stream: MediaStream): Promise<{ pc: RTCPeerConnection; sdp: string }> {
-  const pc = new RTCPeerConnection({ iceServers: [] });
+export async function createOffer(
+  stream: MediaStream,
+  iceServers: RTCIceServer[] = [],
+): Promise<{ pc: RTCPeerConnection; sdp: string; probe: RTCDataChannel }> {
+  const pc = new RTCPeerConnection({ iceServers });
+  // A tiny data channel used as an application-level reachability "test packet".
+  const probe = pc.createDataChannel("probe", { ordered: true });
   stream.getTracks().forEach((t) => pc.addTrack(t, stream));
   await pc.setLocalDescription(await pc.createOffer());
   await waitIceComplete(pc);
-  return { pc, sdp: JSON.stringify(pc.localDescription) };
+  return { pc, sdp: JSON.stringify(pc.localDescription), probe };
 }
 
 export async function createAnswer(
   offerSdp: string,
   onStream: (s: MediaStream) => void,
+  iceServers: RTCIceServer[] = [],
 ): Promise<{ pc: RTCPeerConnection; sdp: string }> {
-  const pc = new RTCPeerConnection({ iceServers: [] });
+  const pc = new RTCPeerConnection({ iceServers });
   pc.ontrack = (e) => onStream(e.streams[0]);
+  // Echo the probe ("p<ts>" → "o<ts>") so the camera phone can measure round-trip.
+  pc.ondatachannel = (ev) => {
+    const ch = ev.channel;
+    ch.onmessage = (m) => {
+      if (typeof m.data === "string" && m.data[0] === "p") {
+        try {
+          ch.send("o" + m.data.slice(1));
+        } catch {
+          /* channel closed */
+        }
+      }
+    };
+  };
   await pc.setRemoteDescription(JSON.parse(offerSdp));
   await pc.setLocalDescription(await pc.createAnswer());
   await waitIceComplete(pc);

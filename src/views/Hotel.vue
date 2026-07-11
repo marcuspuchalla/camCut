@@ -10,6 +10,7 @@ import {
   createOffer,
   createAnswer,
   acceptAnswer,
+  getHotelIceServers,
   type FountainEncoder,
 } from "../lib/offline";
 import { ensureBarcodeDetector } from "../lib/barcodePolyfill";
@@ -41,11 +42,21 @@ const videoReady = ref(false);
 const needTap = ref(false);
 const connState = ref("new");
 
+// Reachability of the *other* phone once coupled: pending → ok | fail.
+// "fail" surfaces the "couldn't reach the other device" screen on both sides.
+const reach = ref<"pending" | "ok" | "fail">("pending");
+const rtt = ref<number | null>(null);
+
 const blockers = baseNotices().filter((n) => n.severity === "blocker");
 
 let scanStream: MediaStream | null = null; // viewer role: temp camera for scanning
 let pc: RTCPeerConnection | null = null;
 let scanCancel: (() => void) | null = null;
+let probe: RTCDataChannel | null = null; // camera role: reachability test channel
+let pingTimer: ReturnType<typeof setInterval> | null = null;
+let watchdog: ReturnType<typeof setTimeout> | null = null;
+
+const REACH_TIMEOUT_MS = 15000; // after coupling, expect a reply within this window
 
 /* ---------------- on-screen diagnostics log ---------------- */
 // A phone has no dev console, so we surface a timestamped log in the UI.
@@ -124,14 +135,82 @@ function tapPlay() {
     .catch(() => {});
 }
 
+function logIce(servers: RTCIceServer[]) {
+  let stun = 0;
+  let turn = 0;
+  for (const s of servers) {
+    const urls = Array.isArray(s.urls) ? s.urls : [s.urls];
+    for (const u of urls) {
+      if (u.startsWith("turn")) turn++;
+      else if (u.startsWith("stun")) stun++;
+    }
+  }
+  if (!stun && !turn) log("network: offline — same-network only (no STUN/TURN)");
+  else log(`network: ${stun} STUN, ${turn} TURN relay(s) — cross-network enabled`);
+}
+
+/* ---------------- reachability test packet ---------------- */
+// After the QR handshake the camera phone opens a tiny "probe" data channel and
+// pings it. A round-trip proves the two devices can actually talk; no reply
+// within REACH_TIMEOUT_MS means the link is broken (strict NAT, no shared
+// internet, firewall) and we say so on both phones.
+function markReachable() {
+  if (reach.value === "fail") return;
+  reach.value = "ok";
+  clearReachTimers();
+}
+function markUnreachable() {
+  if (reach.value === "ok") return;
+  reach.value = "fail";
+  step.value = "connected"; // pull the watcher off its QR screen onto the failure notice
+  clearReachTimers();
+  log("no response from the other device — link unreachable");
+}
+function clearReachTimers() {
+  if (pingTimer) clearInterval(pingTimer);
+  if (watchdog) clearTimeout(watchdog);
+  pingTimer = null;
+  watchdog = null;
+}
+function armReachTimeout() {
+  if (watchdog) clearTimeout(watchdog);
+  watchdog = setTimeout(() => {
+    if (reach.value === "pending") markUnreachable();
+  }, REACH_TIMEOUT_MS);
+}
+// Camera role: drive the probe once the channel opens.
+function startProbe(ch: RTCDataChannel) {
+  probe = ch;
+  const send = () => {
+    if (ch.readyState === "open") ch.send("p" + performance.now());
+  };
+  ch.onopen = () => {
+    log("test packet channel open — pinging watcher");
+    send();
+    pingTimer = setInterval(send, 1500);
+  };
+  ch.onmessage = (m) => {
+    if (typeof m.data === "string" && m.data[0] === "o") {
+      rtt.value = Math.round(performance.now() - parseFloat(m.data.slice(1)));
+      log(`test packet round-trip ${rtt.value}ms — watcher reachable`);
+      markReachable();
+    }
+  };
+}
+
 function watchPc(p: RTCPeerConnection) {
   connState.value = p.connectionState;
   p.onconnectionstatechange = () => {
     connState.value = p.connectionState;
     log(`connection: ${p.connectionState}`);
-    if (p.connectionState === "connected") step.value = "connected";
-    else if (["failed", "disconnected"].includes(p.connectionState) && step.value !== "connected")
-      error.value = "The direct connection dropped. Make sure both phones share one hotspot and try again.";
+    if (p.connectionState === "connected") {
+      step.value = "connected";
+      markReachable(); // ICE says the media path is up
+    } else if (p.connectionState === "failed") {
+      markUnreachable();
+    } else if (p.connectionState === "disconnected" && step.value !== "connected") {
+      error.value = "The connection dropped. Make sure both phones have internet (or share one hotspot) and try again.";
+    }
   };
   p.oniceconnectionstatechange = () => log(`ICE: ${p.iceConnectionState}`);
 }
@@ -165,8 +244,11 @@ async function beCamera() {
     const vt = cameraStream.value.getVideoTracks()[0];
     const s = vt?.getSettings();
     log(`camera on: ${s?.width || "?"}×${s?.height || "?"}`);
-    const res = await createOffer(cameraStream.value);
+    const ice = await getHotelIceServers();
+    logIce(ice);
+    const res = await createOffer(cameraStream.value, ice);
     pc = res.pc;
+    startProbe(res.probe);
     watchPc(pc);
     summarizeCandidates("offer", res.sdp);
     offerEnc.value = await createFountainEncoder(res.sdp);
@@ -193,6 +275,7 @@ async function scanReply() {
     summarizeCandidates("answer (remote)", answerSdp);
     await acceptAnswer(pc!, answerSdp);
     step.value = "connected";
+    armReachTimeout(); // coupling done: expect the test packet to round-trip soon
   } catch (e: any) {
     if (String(e?.message) !== "cancelled") {
       log(`error: ${friendly(e)}`);
@@ -221,13 +304,19 @@ async function beViewer() {
     const offerSdp = await startScan();
     log("offer received — building reply");
 
-    const res = await createAnswer(offerSdp, (stream) => {
-      // Stash the incoming stream; the reactive binding shows it once the
-      // connected view mounts. Do NOT flip `step` here — we still need to show
-      // the answer QR until the camera phone scans it.
-      recvStream.value = stream;
-      log(`remote track received (${stream.getVideoTracks().length} video)`);
-    });
+    const ice = await getHotelIceServers();
+    logIce(ice);
+    const res = await createAnswer(
+      offerSdp,
+      (stream) => {
+        // Stash the incoming stream; the reactive binding shows it once the
+        // connected view mounts. Do NOT flip `step` here — we still need to show
+        // the answer QR until the camera phone scans it.
+        recvStream.value = stream;
+        log(`remote track received (${stream.getVideoTracks().length} video)`);
+      },
+      ice,
+    );
     pc = res.pc;
     watchPc(pc);
     summarizeCandidates("answer", res.sdp);
@@ -255,6 +344,9 @@ function friendly(e: any): string {
 function reset() {
   scanCancel?.();
   scanCancel = null;
+  clearReachTimers();
+  probe?.close();
+  probe = null;
   pc?.close();
   pc = null;
   cameraStream.value?.getTracks().forEach((t) => t.stop());
@@ -269,12 +361,16 @@ function reset() {
   videoReady.value = false;
   needTap.value = false;
   connState.value = "new";
+  reach.value = "pending";
+  rtt.value = null;
   role.value = null;
   step.value = "intro";
 }
 
 onBeforeUnmount(() => {
   scanCancel?.();
+  clearReachTimers();
+  probe?.close();
   pc?.close();
   cameraStream.value?.getTracks().forEach((t) => t.stop());
   scanStream?.getTracks().forEach((t) => t.stop());
@@ -291,7 +387,7 @@ const connClass = computed(() =>
 
 <template>
   <!-- connected: full-screen split view (video + diagnostics), both roles -->
-  <div v-if="step === 'connected'" class="fixed inset-0 bg-black flex flex-col">
+  <div v-if="step === 'connected'" class="fixed inset-0 z-50 bg-black flex flex-col">
     <div class="relative flex-1 min-h-0" @click="tapPlay">
       <video
         ref="stageVideo"
@@ -316,16 +412,35 @@ const connClass = computed(() =>
         {{ role === "camera" ? "Your camera — streaming out" : "Watching the camera phone" }}
       </div>
 
-      <div v-if="!videoReady" class="absolute inset-0 grid place-items-center text-center pointer-events-none">
+      <div v-if="!videoReady && reach !== 'fail'" class="absolute inset-0 grid place-items-center text-center pointer-events-none">
         <div class="text-white/70 text-sm">
           <div class="mx-auto mb-2 w-8 h-8 rounded-full border-2 border-white/20 border-t-glow-a animate-spin"></div>
           {{ role === "viewer" ? "Waiting for video…" : "Starting camera…" }}
         </div>
       </div>
 
-      <button v-if="needTap" class="absolute inset-0 grid place-items-center bg-black/50" @click.stop="tapPlay">
+      <button v-if="needTap && reach !== 'fail'" class="absolute inset-0 grid place-items-center bg-black/50" @click.stop="tapPlay">
         <span class="rounded-full bg-glow-a text-night-800 px-5 py-2 font-round font-bold">Tap to play</span>
       </button>
+
+      <!-- reachability failure: shown on BOTH phones when the test packet never round-trips -->
+      <div v-if="reach === 'fail'" class="absolute inset-0 grid place-items-center bg-black/80 px-8 text-center">
+        <div class="max-w-sm">
+          <div class="text-4xl mb-3">📡</div>
+          <p class="font-round font-bold text-lg text-glow-b">Couldn't reach the other phone</p>
+          <p class="text-white/70 text-sm mt-2 leading-relaxed">
+            The two devices linked up but no data is getting through. Make sure
+            <b class="text-white/90">both phones have internet</b> (or share one hotspot). A strict company/carrier
+            firewall can also block the direct connection.
+          </p>
+          <button
+            class="mt-5 rounded-xl bg-glow-a text-night-800 px-5 py-2.5 font-round font-bold"
+            @click.stop="reset"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- diagnostics log -->
@@ -347,7 +462,7 @@ const connClass = computed(() =>
   </div>
 
   <!-- all other steps: normal page -->
-  <div v-else class="max-w-xl mx-auto px-5 py-6 min-h-dvh flex flex-col">
+  <div v-else class="w-full max-w-xl mx-auto px-5 py-6 flex-1 flex flex-col">
     <BrandHeader back />
 
     <div v-if="blockers.length" class="flex flex-col gap-2.5 mb-4">
