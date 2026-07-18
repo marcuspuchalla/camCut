@@ -12,6 +12,18 @@ import { WebSocket } from "ws";
 
 const short = (id) => String(id).slice(0, 8);
 
+// The room id is the only access control, so the server refuses anything that
+// isn't a properly random UUID v4 (what crypto.randomUUID() produces): version
+// nibble 4, variant nibble 8-b — which also rules out "0", nil and max UUIDs —
+// plus a distinct-digit floor against hand-typed ids like 11111111-….
+// Mirrored in src/lib/room.ts — keep the two in sync.
+const V4_ROOM = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const isValidRoom = (id) => {
+  if (typeof id !== "string") return false;
+  const s = id.toLowerCase();
+  return V4_ROOM.test(s) && new Set(s.replace(/-/g, "")).size >= 5;
+};
+
 /**
  * Aggregate usage counters — deliberately the only "analytics" this project has.
  *
@@ -92,7 +104,10 @@ export function attachSignaling(wss, { log = () => {} } = {}) {
         }
 
         case "publisher": {
-          if (!msg.room) return;
+          if (!isValidRoom(msg.room)) {
+            log(`rejected publisher with invalid room ${short(msg.room)}`);
+            return;
+          }
           ws.role = "publisher";
           ws.room = msg.room;
           const r = getRoom(msg.room);
@@ -107,7 +122,10 @@ export function attachSignaling(wss, { log = () => {} } = {}) {
 
         case "viewer-join": {
           const roomId = ws.room || msg.room;
-          if (!roomId) return;
+          if (!isValidRoom(roomId)) {
+            log(`rejected viewer with invalid room ${short(roomId)}`);
+            return;
+          }
           ws.role = "viewer";
           ws.room = roomId;
           const r = getRoom(roomId);

@@ -9,6 +9,7 @@ import { useCrop } from "../composables/useCrop";
 import { useWakeLock } from "../composables/useWakeLock";
 import { createPublisher, type Publisher } from "../composables/useSignaling";
 import { baseNotices } from "../composables/useCapabilities";
+import { isValidRoom } from "../lib/room";
 
 const route = useRoute();
 const router = useRouter();
@@ -37,7 +38,9 @@ const streamHost = ref(location.host);
 const usingLanIp = computed(() => streamHost.value !== location.host);
 
 onMounted(async () => {
-  if (!room.value) {
+  // Missing OR invalid (hand-edited, guessable) room ids are replaced with a
+  // fresh UUID — the room is the only access control, so it must stay random.
+  if (!isValidRoom(room.value)) {
     room.value = crypto.randomUUID();
     router.replace({ query: { ...route.query, room: room.value } });
   }

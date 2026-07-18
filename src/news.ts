@@ -44,6 +44,13 @@ export interface NewsEntry {
 export const news: NewsEntry[] = [
   {
     date: "2026-07-18",
+    version: "0.12.1",
+    title: "Camera links can only be long random ids",
+    body: "The link to a camera has always been its only key, so it must be impossible to guess. The app now refuses short or hand-made room names like \"0\" everywhere — only the long random ids the app generates itself are accepted, so nobody can stumble into a stream by trying simple names.",
+    kind: "improved",
+  },
+  {
+    date: "2026-07-18",
     version: "0.12.0",
     title: "The app now tells you plainly what it is — and what it isn't",
     body: "Before your first stream, a one-time notice spells it out: Baby Cam Cut only shows you what the camera sees and hears, it doesn't watch your child for you, and a stream can stop without warning. You'll also find this reminder on the camera and watching screens. Being honest about that is part of the product.",

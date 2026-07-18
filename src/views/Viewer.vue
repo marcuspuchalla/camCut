@@ -2,9 +2,12 @@
 import { ref, onMounted, onBeforeUnmount } from "vue";
 import { useRoute } from "vue-router";
 import { createViewer, type Viewer, type ViewerState } from "../composables/useSignaling";
+import { isValidRoom } from "../lib/room";
 
 const route = useRoute();
 const room = String(route.query.room ?? "");
+// Only properly random room ids are accepted — see src/lib/room.ts.
+const roomOk = isValidRoom(room);
 
 const videoEl = ref<HTMLVideoElement>();
 const state = ref<ViewerState>("connecting");
@@ -53,7 +56,7 @@ const label: Record<ViewerState, string> = {
 };
 
 onMounted(async () => {
-  if (!room) {
+  if (!roomOk) {
     state.value = "waiting";
     return;
   }
@@ -106,7 +109,13 @@ onBeforeUnmount(() => viewer?.stop());
           :class="{ 'animate-spin': state === 'connecting' || state === 'reconnecting' }"
         ></div>
         <p class="font-round font-semibold text-moon">{{ label[state] }}</p>
-        <p v-if="!room" class="text-muted text-sm mt-2">This link is missing a room id.</p>
+        <p v-if="!roomOk" class="text-muted text-sm mt-2">
+          {{
+            room
+              ? "This link's room id isn't valid. Open the link exactly as it was shared from the camera device."
+              : "This link is missing a room id."
+          }}
+        </p>
         <p class="text-[#ffb3c1] text-xs mt-4 max-w-xs mx-auto leading-relaxed">
           This stream only shows what the camera sees — it doesn't watch your child, and it can stop without
           warning. Use at your own risk; never a substitute for an adult nearby.
