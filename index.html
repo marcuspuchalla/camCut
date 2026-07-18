@@ -14,14 +14,10 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Baby Cam Cut" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <!-- Privacy-friendly, cookieless analytics (self-hosted Umami) -->
-    <script defer src="https://a.fmp.dev/script.js" data-website-id="d1c1eab1-cd53-41f6-aabe-6a6a3d4b3002"></script>
+    <!-- No external requests from this page, by design: the font is bundled
+         (see src/style.css) and there is no analytics. Loading a font from
+         Google's CDN would send every visitor's IP to Google without a legal
+         basis; the app also has to run with no internet at all in Hotel mode. -->
   </head>
   <body>
     <div id="app"></div>

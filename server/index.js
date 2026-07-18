@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import { attachSignaling } from "./signaling.js";
+import { attachSignaling, stats } from "./signaling.js";
 import { getLanIps, getIceServers } from "./net.js";
 
 // Standalone production server for Baby Cam Cut: serves the built static app
@@ -54,6 +54,14 @@ const server = http.createServer((req, res) => {
   if (pathname === "/api/lan-info") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ips: getLanIps() }));
+    return;
+  }
+
+  // Aggregate counters since the server last restarted. Public on purpose —
+  // there is nothing here to keep secret, which is the point.
+  if (pathname === "/api/stats") {
+    res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    res.end(JSON.stringify(stats));
     return;
   }
 

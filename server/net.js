@@ -16,16 +16,46 @@ export function getLanIps() {
 // ICE servers offered to the browser for WebRTC. STUN finds a direct path
 // (works when both devices can reach each other, e.g. same Wi-Fi). TURN relays
 // media when a direct path is impossible (different networks, strict NAT,
-// hardened browsers like Vanadium). Three ways to supply TURN, in priority:
+// hardened browsers like Vanadium).
 //
-//   1. Cloudflare Realtime TURN (recommended — free 1,000 GB/mo, relayed media
-//      goes through Cloudflare, not this server):
-//        TURN_KEY_ID=...            TURN_KEY_API_TOKEN=...
-//   2. A static TURN server (e.g. self-hosted coturn in turn/):
+// There is deliberately NO public/Google STUN fallback: every STUN request
+// sends the user's IP to whoever runs the server — the same third-party
+// pattern as the Google Fonts case (see docs/legal-briefing.md §3.4). Only
+// servers the operator configured are handed out. coturn (turn/) answers STUN
+// on the same port with no credentials, so a TURN_URL gives you STUN for free.
+//
+// Configuration, in priority:
+//   1. Self-hosted coturn (recommended — see turn/README.md):
 //        TURN_URL=turn:host:3478,turn:host:3478?transport=tcp
 //        TURN_USERNAME=...          TURN_CREDENTIAL=...
-//   3. Nothing set → STUN only (same-network works; cross-network won't).
-const STUN = { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] };
+//      STUN is derived from the TURN_URL hosts automatically.
+//   2. Cloudflare Realtime TURN (relayed media transits Cloudflare — this has
+//      GDPR consequences for video of children, see docs/legal-briefing.md;
+//      don't enable it silently):
+//        TURN_KEY_ID=...            TURN_KEY_API_TOKEN=...
+//   3. STUN_URL=stun:host:3478[,stun:...] — explicit STUN without TURN.
+//   4. Nothing set → no ICE servers: same-network streaming still works via
+//      host candidates; cross-network needs 1–3.
+
+function stunServers() {
+  if (process.env.STUN_URL) {
+    return [{ urls: process.env.STUN_URL.split(",").map((s) => s.trim()) }];
+  }
+  if (process.env.TURN_URL) {
+    const urls = [
+      ...new Set(
+        process.env.TURN_URL.split(",")
+          .map((s) => {
+            const m = s.trim().match(/^turn:([^?]+)/); // plain turn: only — turns: ports speak TLS, not STUN
+            return m ? `stun:${m[1]}` : null;
+          })
+          .filter(Boolean),
+      ),
+    ];
+    if (urls.length) return [{ urls }];
+  }
+  return [];
+}
 
 // Cloudflare returns creds valid for `ttl`; cache and reuse to avoid an API
 // call per request.
@@ -49,7 +79,8 @@ export async function getIceServers() {
       if (res.ok) {
         const data = await res.json();
         const cf = data.iceServers;
-        const servers = [STUN, ...(Array.isArray(cf) ? cf : [cf])];
+        // Cloudflare's response already includes its own STUN urls.
+        const servers = [...stunServers(), ...(Array.isArray(cf) ? cf : [cf])];
         cfCache = { servers, expires: Date.now() + 12 * 60 * 60 * 1000 };
         return servers;
       }
@@ -60,7 +91,7 @@ export async function getIceServers() {
 
   if (process.env.TURN_URL) {
     return [
-      STUN,
+      ...stunServers(),
       {
         urls: process.env.TURN_URL.split(",").map((s) => s.trim()),
         username: process.env.TURN_USERNAME || "",
@@ -69,5 +100,5 @@ export async function getIceServers() {
     ];
   }
 
-  return [STUN];
+  return stunServers();
 }

@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @plugin "tailwindcss-primeui";
 
+/* Baloo 2, bundled rather than fetched from Google's CDN — keeps visitor IPs
+   out of Google's hands and lets the app render offline in Hotel mode. */
+@import "@fontsource/baloo-2/500.css";
+@import "@fontsource/baloo-2/600.css";
+@import "@fontsource/baloo-2/700.css";
+
 /* Baby Cam Cut — "Night Nursery" design tokens as Tailwind theme colors. */
 @theme {
   --color-night-900: #0b0d1a;

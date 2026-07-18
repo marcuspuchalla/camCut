@@ -325,9 +325,9 @@ export function scanQR(
 // serverlessly too. Offline (no internet) STUN/TURN simply don't resolve and we
 // fall back to host candidates → same-network still works.
 
-const STUN: RTCIceServer = { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] };
-
-/** Fetch STUN+TURN from the server; fall back to public STUN (or nothing offline). */
+/** Fetch STUN+TURN from the server. No hardcoded public-STUN fallback: a STUN
+ *  request hands the user's IP to whoever runs the server (CLAUDE.md §4), and
+ *  offline/hotel use works over host candidates anyway. */
 export async function getHotelIceServers(): Promise<RTCIceServer[]> {
   try {
     const ctrl = new AbortController();
@@ -335,11 +335,11 @@ export async function getHotelIceServers(): Promise<RTCIceServer[]> {
     const r = await fetch("/api/ice", { signal: ctrl.signal });
     clearTimeout(to);
     const j = await r.json();
-    if (Array.isArray(j.iceServers) && j.iceServers.length) return j.iceServers;
+    if (Array.isArray(j.iceServers)) return j.iceServers;
   } catch {
     /* offline or server unreachable */
   }
-  return [STUN];
+  return [];
 }
 
 // Wait until ICE gathering completes so the one-shot SDP carries every

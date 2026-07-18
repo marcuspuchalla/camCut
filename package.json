@@ -1,6 +1,6 @@
 {
   "name": "baby-cam-cut",
-  "version": "0.10.0",
+  "version": "0.12.0",
   "description": "Baby Cam Cut — watch your little one on your desktop, another device, or fully offline over a hotspot.",
   "license": "GPL-3.0-or-later",
   "author": "Marcus Puchalla",
@@ -12,6 +12,7 @@
     "start": "bun server/index.js"
   },
   "dependencies": {
+    "@fontsource/baloo-2": "^5.2.7",
     "@primevue/themes": "^4.2.5",
     "barcode-detector": "^3.2.0",
     "jsqr": "^1.4.0",

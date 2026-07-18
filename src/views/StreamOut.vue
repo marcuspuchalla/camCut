@@ -6,6 +6,7 @@ import DeviceNote from "../components/DeviceNote.vue";
 import QrCode from "../components/QrCode.vue";
 import { useCamera } from "../composables/useCamera";
 import { useCrop } from "../composables/useCrop";
+import { useWakeLock } from "../composables/useWakeLock";
 import { createPublisher, type Publisher } from "../composables/useSignaling";
 import { baseNotices } from "../composables/useCapabilities";
 
@@ -58,6 +59,10 @@ const live = ref(false);
 const viewerCount = ref(0);
 let publisher: Publisher | null = null;
 
+// Keep the camera device's screen awake while live: a dimmed/locked phone
+// throttles or suspends the page and the stream dies with it.
+const wake = useWakeLock();
+
 watch(
   () => cam.rawStream.value,
   (s) => {
@@ -68,8 +73,13 @@ watch(
   () => cam.outStream.value,
   (s) => {
     if (cropVideo.value) cropVideo.value.srcObject = s;
+    // Camera flip / re-acquire while live: hand viewers the new tracks.
+    if (s && publisher) publisher.setStream(s);
   },
 );
+
+// The watermark burned into the picture: the host the viewer link points at.
+watch(streamHost, (h) => (cam.overlayLabel.value = h), { immediate: true });
 
 async function begin() {
   await cam.start();
@@ -84,6 +94,7 @@ async function goLive() {
   publisher = createPublisher(room.value, cam.outStream.value, (n) => (viewerCount.value = n));
   await publisher.start();
   live.value = true;
+  await wake.acquire();
 }
 
 function stopLive() {
@@ -91,6 +102,7 @@ function stopLive() {
   publisher = null;
   live.value = false;
   viewerCount.value = 0;
+  void wake.release();
 }
 
 const copied = ref(false);
@@ -128,9 +140,13 @@ onBeforeUnmount(stopLive);
       <DeviceNote v-for="n in blockers" :key="n.id" :note="n" />
     </div>
 
-    <p class="text-muted text-sm mb-4 leading-relaxed">
+    <p class="text-muted text-sm mb-1 leading-relaxed">
       Use this device as the camera. Draw a box to stream only that area, then go live and open the link on a
       phone or send it to someone you trust — the video streams directly between the devices.
+    </p>
+    <p class="text-[#ffb3c1] text-xs mb-4 leading-relaxed">
+      It only shows what the camera sees — it doesn't watch your child, and the stream can stop without
+      warning. Use at your own risk; keep an adult nearby.
     </p>
 
     <!-- preview / crop stage -->
@@ -193,6 +209,26 @@ onBeforeUnmount(stopLive);
 
     <p v-if="cam.error.value" class="text-glow-b text-sm mt-3">{{ cam.error.value }}</p>
 
+    <!-- persistent while live without a screen lock: a sleeping screen is the
+         main way an unattended stream silently stops -->
+    <div
+      v-if="live && !wake.held.value"
+      class="mt-3 rounded-xl border border-glow-a/50 bg-glow-a/10 px-4 py-3 text-sm flex items-start gap-2.5"
+    >
+      <i class="pi pi-sun mt-0.5 text-glow-a"></i>
+      <span v-if="wake.supported">
+        The screen isn't being kept awake right now. If this device's screen turns off or locks, the stream can
+        stop without warning — return to this page or turn off battery saver so it can stay on.
+      </span>
+      <span v-else>
+        This browser can't keep the screen awake. Set this device's screen timeout to "never" (or keep it
+        plugged in with the screen on) — if the screen locks, the stream can stop without warning.
+      </span>
+    </div>
+    <p v-else-if="live" class="text-muted2 text-xs mt-3 flex items-center gap-1.5">
+      <i class="pi pi-sun"></i>The screen stays awake while you're live.
+    </p>
+
     <!-- controls -->
     <div v-if="cam.running.value" class="flex flex-wrap gap-2.5 mt-4">
       <button
@@ -214,6 +250,15 @@ onBeforeUnmount(stopLive);
         @click="cam.flip()"
       >
         <i class="pi pi-sync"></i>Switch camera
+      </button>
+      <button
+        v-if="cam.hasAudio.value"
+        class="rounded-xl border border-line bg-night-700 hover:bg-night-600 px-4 py-2.5 font-round font-semibold text-sm flex items-center gap-2"
+        :class="{ 'text-glow-b border-glow-b/50': !cam.micOn.value }"
+        @click="cam.toggleMic()"
+      >
+        <i :class="cam.micOn.value ? 'pi pi-microphone' : 'pi pi-microphone-slash'"></i>
+        {{ cam.micOn.value ? "Sound on" : "Muted" }}
       </button>
       <button
         v-if="!live"

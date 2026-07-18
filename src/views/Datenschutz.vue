@@ -8,8 +8,9 @@ import { RouterLink } from "vue-router";
     <h1 class="font-round font-bold text-2xl mt-6 mb-2 text-ink">Datenschutzerklärung</h1>
 
     <p class="text-mint">
-      Kurzfassung: Baby Cam Cut überträgt Video direkt zwischen deinen Geräten (Peer-to-Peer). Keine Konten, keine
-      Aufzeichnung. Zur Reichweitenmessung wird das cookiefreie, selbst gehostete Umami eingesetzt.
+      Kurzfassung: Baby Cam Cut überträgt Bild und Ton direkt zwischen deinen Geräten (Peer-to-Peer). Keine
+      Konten, keine Aufzeichnung, kein Tracking, keine Cookies. Die Oberfläche lädt keine Inhalte von fremden
+      Servern. Für den Verbindungsaufbau werden allerdings STUN-/TURN-Dienste kontaktiert — siehe Abschnitt 6.
     </p>
 
     <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">1. Verantwortliche Stelle</h2>
@@ -32,21 +33,35 @@ import { RouterLink } from "vue-router";
       vorliegen.
     </p>
 
-    <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">3. Reichweitenmessung mit Umami</h2>
+    <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">3. Kein Tracking, keine Cookies</h2>
     <p>
-      Diese Website nutzt zur Reichweitenanalyse die selbst gehostete Open-Source-Software Umami (geladen von
-      a.fmp.dev, betrieben vom Verantwortlichen dieser Website). Umami arbeitet cookiefrei und speichert keine
-      personenbezogenen Daten. Erfasst werden ausschließlich aggregierte, anonymisierte Statistiken wie aufgerufene
-      Seiten, Referrer, ungefähre Region (auf Basis der anonymisierten IP-Adresse) und Gerätetyp. Ein Rückschluss auf
-      einzelne Nutzer ist nicht möglich. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO; das berechtigte Interesse
-      besteht darin, die Nutzung der Website zu verstehen und diese verbessern zu können.
+      Diese Website und die App setzen <strong>keine Analyse-Software, kein Tracking und keine Cookies</strong>
+      ein. Es werden keine Einwilligungen nach § 25 TDDDG benötigt, weil auf deinem Endgerät weder Informationen
+      gespeichert noch ausgelesen werden.
+    </p>
+    <p class="mt-2">
+      Um zu erkennen, wie oft die App genutzt wird, zählt der Verbindungsdienst lediglich zwei Gesamtzahlen:
+      wie oft eine Kamera gestartet und wie oft eine Verbindung hergestellt wurde. Das sind reine Zähler ohne
+      IP-Adressen, ohne Kennungen und ohne Zeitpunkte einzelner Personen. Ein Personenbezug entsteht dabei nicht.
     </p>
 
     <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">4. Video- und Audioübertragung (WebRTC)</h2>
     <p>
-      Die Kamerabilder werden über WebRTC direkt zwischen den beteiligten Geräten übertragen (Peer-to-Peer). Sie
-      werden nicht auf dem Server gespeichert und im Normalfall nicht über den Server geleitet. Es findet keine
-      Aufzeichnung statt.
+      Bild <strong>und Ton</strong> werden über WebRTC direkt zwischen den beteiligten Geräten übertragen
+      (Peer-to-Peer) und dabei Ende-zu-Ende verschlüsselt (DTLS-SRTP). Sie werden nicht auf dem Server
+      gespeichert und im Normalfall nicht über den Server geleitet. Es findet <strong>keine Aufzeichnung</strong>
+      statt — weder von Bild noch von Ton.
+    </p>
+    <p class="mt-2">
+      Das Mikrofon des Kamerageräts wird zusammen mit der Kamera aktiviert und kann jederzeit auf beiden Seiten
+      stummgeschaltet werden. Die Aufnahme verlässt dein Gerät ausschließlich als verschlüsselter Direktstream an
+      dein zweites Gerät.
+    </p>
+    <p class="mt-2">
+      <strong>Kinder als Betroffene:</strong> Die übertragenen Bild- und Tondaten betreffen typischerweise ein
+      Kind. Diese Daten sind für den Anbieter zu keinem Zeitpunkt zugänglich; sie fließen ausschließlich zwischen
+      den Geräten, die von den Erziehungsberechtigten kontrolliert werden. Eine Verarbeitung durch den Anbieter
+      findet insoweit nicht statt.
     </p>
 
     <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">5. Verbindungsaufbau (Signaling)</h2>
@@ -59,9 +74,11 @@ import { RouterLink } from "vue-router";
 
     <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">6. STUN-/TURN-Server</h2>
     <p>
-      Für den Verbindungsaufbau werden STUN-Server genutzt (u. a. stun.l.google.com). Ist eine direkte Verbindung
-      nicht möglich, kann ein TURN-Server den verschlüsselten Stream weiterleiten; dabei werden IP-Adressen und
-      Mediendaten an den jeweiligen Anbieter übermittelt.
+      Für den Verbindungsaufbau wird ausschließlich ein vom Betreiber dieser Instanz selbst betriebener
+      STUN-/TURN-Server genutzt; es werden keine STUN-Server von Google oder anderen Dritten kontaktiert. Ist eine
+      direkte Verbindung nicht möglich, kann dieser Server den verschlüsselten Stream weiterleiten; er kann die
+      Inhalte nicht einsehen. Dabei werden IP-Adressen flüchtig zum Verbindungsaufbau verarbeitet (Art. 6 Abs. 1
+      lit. b und f DSGVO).
     </p>
 
     <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">7. Offline-/Hotel-Modus</h2>
@@ -80,8 +97,9 @@ import { RouterLink } from "vue-router";
 
     <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">9. Schriftarten</h2>
     <p>
-      Die Oberfläche lädt „Baloo 2" von Google Fonts (IP-Übermittlung an Google); fällt der Dienst aus oder bist du
-      offline, wird eine System-Schriftart genutzt.
+      Die Schriftart „Baloo 2" wird <strong>direkt von diesem Server</strong> ausgeliefert und nicht von Google
+      Fonts geladen. Beim Aufruf der Oberfläche werden dadurch keine Inhalte von Servern Dritter geladen und
+      keine Daten an Google übermittelt.
     </p>
 
     <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">10. Deine Rechte</h2>

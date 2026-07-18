@@ -7,7 +7,7 @@ import { RouterLink } from "vue-router";
     <RouterLink to="/" class="font-round font-semibold text-[#ffd0a8] no-underline hover:underline">← Zurück</RouterLink>
     <h1 class="font-round font-bold text-2xl mt-6 mb-2 text-ink">Impressum</h1>
 
-    <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">Angaben gemäß § 5 TMG</h2>
+    <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">Angaben gemäß § 5 DDG</h2>
     <p class="my-1">Marcus Puchalla</p>
     <p class="my-1">Gorkistraße 88</p>
     <p class="my-1">04347 Leipzig</p>
@@ -16,9 +16,18 @@ import { RouterLink } from "vue-router";
     <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">Kontakt</h2>
     <p class="my-1">E-Mail: <a href="mailto:marcus@puchalla.dev" class="text-[#ffd0a8]">marcus@puchalla.dev</a></p>
 
-    <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">Umsatzsteuer-ID</h2>
-    <p class="my-1">Umsatzsteuer-Identifikationsnummer gemäß § 27 a Umsatzsteuergesetz:</p>
-    <p class="my-1">DE353204356</p>
+    <!-- Deliberately no USt-IdNr here: Baby Cam Cut is a private, non-commercial
+         hobby project and is not offered in the course of a trade or profession.
+         A VAT ID would say the opposite, and that single line could cost the
+         non-commercial exemptions under the EU Product Liability Directive
+         2024/2853 and the Cyber Resilience Act. See docs/legal-briefing.md. -->
+
+    <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">Art des Angebots</h2>
+    <p class="my-1">
+      Baby Cam Cut ist ein privates, nicht-kommerzielles Hobbyprojekt. Es wird kostenlos angeboten — ohne
+      Werbung, ohne In-App-Käufe, ohne Spendenfunktion, ohne Konten und ohne Vermarktung von Daten. Das Angebot
+      erfolgt nicht im Rahmen einer gewerblichen oder beruflichen Tätigkeit.
+    </p>
 
     <h2 class="font-round font-semibold text-lg mt-7 mb-1 text-moon">Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
     <p class="my-1">Marcus Puchalla</p>
@@ -31,9 +40,9 @@ import { RouterLink } from "vue-router";
     <p class="my-1">
       Die Inhalte dieser Seiten wurden mit größter Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit und
       Aktualität der Inhalte kann ich jedoch keine Gewähr übernehmen. Als Diensteanbieter bin ich gemäß § 7 Abs. 1
-      TMG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Nach §§ 8 bis 10 TMG bin
-      ich als Diensteanbieter jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen zu
-      überwachen.
+      DDG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Nach §§ 8 bis 10 DDG
+      bin ich als Diensteanbieter jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen
+      zu überwachen.
     </p>
 
     <h3 class="font-round font-semibold mt-4 mb-1 text-[#e6b877]">Haftung für Links</h3>

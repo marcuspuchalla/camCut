@@ -10,6 +10,22 @@ server. No app to install, no account, no cloud recording.
 
 ---
 
+## ⚠️ Not a safety device — use at your own risk
+
+Baby Cam Cut only sends live picture and sound from one of your devices to
+another. **It does not watch your child for you** — not automatically, not
+continuously. It detects nothing: no breathing, no movement, no crying, no
+danger. It is not a medical device, and it is intended for healthy children
+only.
+
+**The stream can stop at any time without warning** — network trouble, an empty
+battery, the operating system stepping in — **and the failure may not be shown
+to you.** Use it as a convenience, at your own risk. It never replaces having
+an adult nearby; never leave a child alone relying on this or any other
+technology.
+
+---
+
 ## Why I built this
 
 Our baby naps in a crib behind me while I work, and I wanted to keep half an eye

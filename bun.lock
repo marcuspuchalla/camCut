@@ -5,6 +5,7 @@
     "": {
       "name": "baby-cam-cut",
       "dependencies": {
+        "@fontsource/baloo-2": "^5.2.7",
         "@primevue/themes": "^4.2.5",
         "barcode-detector": "^3.2.0",
         "jsqr": "^1.4.0",
@@ -259,6 +260,8 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.21.5", "", { "os": "win32", "cpu": "ia32" }, "sha512-SWXFF1CL2RVNMaVs+BBClwtfZSvDgtL//G/smwAc5oVK/UPu2Gu9tIaRgFmYFFKrmg3SyAjSrElf0TiJ1v8fYA=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.21.5", "", { "os": "win32", "cpu": "x64" }, "sha512-tQd/1efJuzPC6rCFwEvLtci/xNFcTZknmXs98FYDfGE4wP9ClFV98nyKrzJKVPMhdDnjzLhdUyMX4PsQAPjwIw=="],
+
+    "@fontsource/baloo-2": ["@fontsource/baloo-2@5.2.7", "", {}, "sha512-RllEWCvjw0PqLey6hbNI2M8gdZy2CFCIHXXNIXC4V4xsRQeOgZ3OMx3uQ1u4LjJ16BGytZD6wE/VFU9st0VdDg=="],
 
     "@isaacs/cliui": ["@isaacs/cliui@9.0.0", "", {}, "sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg=="],
 

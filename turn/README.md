@@ -5,6 +5,13 @@ A TURN server relays the video when two devices can't reach each other directly
 relay is unavoidable for those cases — no "pure P2P" library removes it (see the
 note at the bottom). Two good options:
 
+> **STUN note:** the app no longer falls back to Google's STUN servers (every
+> STUN request sends the user's IP to whoever runs it). coturn answers STUN on
+> the same port, and the app automatically derives `stun:` URLs from
+> `TURN_URL` — so Option B gives you STUN for free. Without any TURN/STUN
+> configured, streaming works on the same network only. A STUN-only setup is
+> possible via `STUN_URL=stun:host:3478` on the app.
+
 ## Option A — Cloudflare Realtime TURN (recommended, easiest)
 
 Free 1,000 GB/month, and **relayed video flows through Cloudflare, not your
